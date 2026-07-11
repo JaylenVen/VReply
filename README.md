@@ -28,31 +28,14 @@ Then open the link.
 
 ## AI Dictionary and Translation
 
-AI-powered dictionary lookup and translation use the OpenAI API on the server side.
+AI-powered dictionary lookup and translation use the DeepSeek API on the server side.
 
 Set your API key before starting VReply:
 
 ```powershell
-$env:OPENAI_API_KEY="your-server-side-key"
+$env:VREPLY_LLM_API_KEY="your API key"
+$env:VREPLY_LLM_MODEL="deepseek-v4-flash"
 python server.py
-```
-
-You can also use:
-
-```powershell
-$env:VREPLY_LLM_API_KEY="your-server-side-key"
-```
-
-The default model is:
-
-```text
-gpt-5.4-mini
-```
-
-To use another model:
-
-```powershell
-$env:VREPLY_LLM_MODEL="your-model-name"
 ```
 
 The API key is never exposed to the browser.
@@ -90,8 +73,6 @@ and return timed transcript segments.
 ## Security
 
 Do not store API keys in browser-side code or commit them to GitHub.
-
-The server binds to `127.0.0.1` by default and is intended for local use. Public deployment requires additional security measures such as authentication, rate limiting, HTTPS, and request controls.
 
 ## Project Status
 
