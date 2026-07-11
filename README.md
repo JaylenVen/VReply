@@ -24,11 +24,7 @@ VReply requires Python 3 and uses a dependency-free local server.
 python server.py
 ```
 
-Then open:
-
-```text
-http://127.0.0.1:4173
-```
+Then open the link.
 
 ## AI Dictionary and Translation
 
