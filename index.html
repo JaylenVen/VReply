@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="VReply turns videos into focused English speaking practice with a time-synced transcript."
+    />
+    <meta name="theme-color" content="#f2efe8" />
+    <title>VReply — Watch. Reply. Speak.</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Sans:wdth,wght@75..100,400..700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css?v=20260711-language" />
+  </head>
+  <body>
+    <div class="page-noise" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <button class="brand" id="brandButton" type="button" aria-label="VReply home">
+        <span class="brand-mark" aria-hidden="true">
+          <span>V</span>
+          <i></i>
+        </span>
+        <span class="brand-name">VReply</span>
+      </button>
+
+      <div class="header-actions">
+        <button class="quiet-button is-hidden" id="newVideoButton" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          New video
+        </button>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <section class="landing-view" id="landingView" aria-labelledby="heroTitle">
+        <div class="landing-copy">
+          <div class="eyebrow reveal reveal-1">
+            Video to voice
+          </div>
+
+          <h1 id="heroTitle" class="hero-title reveal reveal-2">
+            <span>Watch it.</span>
+            <span class="hero-title-serif">Own the words.</span>
+          </h1>
+
+          <p class="hero-description reveal reveal-3">
+            Turn a YouTube video into a focused English speaking room.
+            Paste, listen, repeat — the transcript keeps your place.
+          </p>
+        </div>
+
+        <div class="intake-column reveal reveal-3">
+          <div class="intake-card">
+            <div class="intake-card-topline">
+              <span>Start a new practice</span>
+            </div>
+
+            <form class="url-form" id="urlForm" novalidate>
+              <label for="videoUrl">Video link</label>
+              <div class="url-field" id="urlField">
+                <svg class="url-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M10.6 13.4a4 4 0 0 0 5.7.1l2.1-2.1a4 4 0 1 0-5.7-5.7l-1.2 1.2" />
+                  <path d="M13.4 10.6a4 4 0 0 0-5.7-.1l-2.1 2.1a4 4 0 1 0 5.7 5.7l1.2-1.2" />
+                </svg>
+                <input
+                  id="videoUrl"
+                  name="videoUrl"
+                  type="url"
+                  inputmode="url"
+                  autocomplete="url"
+                  placeholder="Paste a YouTube link"
+                  aria-describedby="urlError"
+                />
+                <button class="submit-button" type="submit" aria-label="Import video">
+                  <span>Import</span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 12h14M13 6l6 6-6 6" />
+                  </svg>
+                </button>
+              </div>
+              <p class="field-error" id="urlError" role="alert"></p>
+            </form>
+
+          </div>
+
+          <div class="workflow-strip" aria-label="How VReply works">
+            <div class="workflow-item">
+              <p><strong>Drop a link</strong>We open the video right here.</p>
+            </div>
+            <div class="workflow-divider" aria-hidden="true"></div>
+            <div class="workflow-item">
+              <p><strong>Catch every line</strong>Speech becomes a timed transcript.</p>
+            </div>
+            <div class="workflow-divider" aria-hidden="true"></div>
+            <div class="workflow-item">
+              <p><strong>Reply out loud</strong>Tap any sentence and shadow it.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace-view is-hidden" id="workspaceView" aria-label="Speaking practice workspace">
+        <div class="project-bar">
+          <div class="project-identity">
+            <h1 id="projectTitle">Everyday English Practice</h1>
+          </div>
+        </div>
+
+        <div class="practice-grid">
+          <section class="video-panel" aria-label="Video player">
+            <div class="video-stage" id="videoStage">
+              <div class="video-mount" id="videoMount" aria-label="Imported video"></div>
+              <div class="video-placeholder" id="videoPlaceholder" aria-hidden="true">
+                <div class="placeholder-orbit orbit-one"></div>
+                <div class="placeholder-orbit orbit-two"></div>
+                <div class="placeholder-mark">V</div>
+              </div>
+
+              <div class="extract-overlay" id="extractOverlay" aria-live="polite">
+                <div class="extract-visual" aria-hidden="true">
+                  <div class="sound-bars">
+                    <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                  </div>
+                </div>
+                <span class="extract-kicker">Preparing your practice</span>
+                <h2 id="extractTitle">Reading the video…</h2>
+                <p id="extractDetail">Opening the source and mapping every spoken line.</p>
+                <div class="extract-progress"><i id="extractProgress"></i></div>
+              </div>
+            </div>
+
+            <div class="caption-overlay" id="captionOverlay" aria-live="polite" aria-label="Current practice subtitle">
+              <p id="captionText">Your current sentence will appear here.</p>
+            </div>
+
+            <div class="player-controls">
+              <button class="control-button" id="rewindButton" type="button" aria-label="Back 5 seconds">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8H5V4M5.2 8.2a8 8 0 1 1-1 6.8" /><text x="10.2" y="15.3">5</text></svg>
+              </button>
+              <button class="play-button" id="playButton" type="button" aria-label="Play video">
+                <svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7 8 5-8 5V7Z" /></svg>
+                <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7v10M15 7v10" /></svg>
+              </button>
+              <button class="control-button" id="forwardButton" type="button" aria-label="Forward 5 seconds">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 8h4V4m-.2 4.2a8 8 0 1 0 1 6.8" /><text x="7.3" y="15.3">5</text></svg>
+              </button>
+
+              <span class="time-readout"><b id="currentTime">00:00</b><i>/</i><span id="durationTime">02:30</span></span>
+
+              <label class="progress-control" aria-label="Video progress">
+                <input id="progressRange" type="range" min="0" max="150" step="0.1" value="0" />
+                <span class="progress-track"><i id="progressFill"></i></span>
+              </label>
+
+              <button class="speed-button" id="speedButton" type="button" aria-label="Playback speed">1×</button>
+              <button class="control-button" id="muteButton" type="button" aria-label="Mute video">
+                <svg class="volume-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10v4h4l4 3V7l-4 3H5ZM16 9.5a4 4 0 0 1 0 5M18.5 7a7.5 7.5 0 0 1 0 10" /></svg>
+                <svg class="muted-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10v4h4l4 3V7l-4 3H5ZM17 10l4 4m0-4-4 4" /></svg>
+              </button>
+              <button class="control-button" id="theaterButton" type="button" aria-label="Hide transcript">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4zM8 18V6M16 18V6" /></svg>
+              </button>
+            </div>
+
+            <div class="practice-tools">
+              <button class="loop-button" id="loopButton" type="button" aria-pressed="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a4 4 0 0 1 4 4M17 4l3 3-3 3M17 17H7a4 4 0 0 1-4-4M7 20l-3-3 3-3" /></svg>
+                Loop this line
+              </button>
+            </div>
+          </section>
+
+          <aside class="transcript-panel" aria-label="Timed transcript">
+            <header class="transcript-header">
+              <div>
+                <h2>Transcript <small id="transcriptCount">0</small></h2>
+              </div>
+              <div class="transcript-actions">
+                <button class="translation-toggle" id="translationToggle" type="button" aria-pressed="false" aria-describedby="languageStatus" disabled>
+                  <span aria-hidden="true">译</span>
+                  <b>译文</b>
+                </button>
+                <span class="sr-only" id="languageStatus" aria-live="polite"></span>
+                <button class="icon-button" id="searchButton" type="button" aria-label="Search transcript">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></svg>
+                </button>
+                <button class="icon-button" id="downloadButton" type="button" aria-label="Download transcript">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M8 11l4 4 4-4M5 20h14" /></svg>
+                </button>
+              </div>
+            </header>
+
+            <div class="search-row is-hidden" id="searchRow">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></svg>
+              <input id="transcriptSearch" type="search" placeholder="Find a word or phrase" autocomplete="off" />
+              <span id="searchResultCount">0</span>
+            </div>
+
+            <div class="transcript-options">
+              <button class="follow-toggle is-active" id="followToggle" type="button" aria-pressed="true">
+                <span><i></i></span>
+                Auto-follow
+              </button>
+            </div>
+
+            <section class="dictionary-card is-hidden" id="dictionaryCard" role="dialog" aria-live="polite" aria-label="Context dictionary">
+              <header>
+                <div>
+                  <strong id="dictionaryTerm">Word</strong>
+                  <span id="dictionaryMeta"></span>
+                </div>
+                <button class="dictionary-close" id="dictionaryClose" type="button" aria-label="Close dictionary">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+                </button>
+              </header>
+              <p class="dictionary-status" id="dictionaryStatus">正在读取语境…</p>
+              <div class="dictionary-content is-hidden" id="dictionaryContent">
+                <p class="dictionary-meaning" id="dictionaryMeaning"></p>
+                <p class="dictionary-context" id="dictionaryContext"></p>
+                <div class="dictionary-example">
+                  <span>例句</span>
+                  <p id="dictionaryExample"></p>
+                  <small id="dictionaryExampleTranslation"></small>
+                </div>
+              </div>
+            </section>
+
+            <div class="transcript-scroll" id="transcriptScroll" tabindex="0">
+              <div class="transcript-skeleton" id="transcriptSkeleton" aria-hidden="true">
+                <div><i></i><span></span></div>
+                <div><i></i><span></span></div>
+                <div><i></i><span></span></div>
+                <div><i></i><span></span></div>
+              </div>
+              <div class="transcript-list" id="transcriptList"></div>
+              <div class="transcript-empty is-hidden" id="transcriptEmpty">
+                <span>No lines found</span>
+                Try a different search.
+              </div>
+            </div>
+
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite">
+      <span class="toast-icon">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 12 4 4 8-9" /></svg>
+      </span>
+      <div>
+        <strong id="toastTitle"></strong>
+        <span id="toastText"></span>
+      </div>
+    </div>
+
+    <script>
+      window.VREPLY_TRANSCRIBE_ENDPOINT = "/api/transcribe";
+    </script>
+    <script src="app.js?v=20260711-language"></script>
+  </body>
+</html>
