@@ -4,8 +4,9 @@ Besides serving the files next to this module, the server exposes caption,
 contextual-dictionary, and line-translation endpoints. Caption extraction does
 not run speech recognition itself.
 
-AI language features use the DeepSeek Chat Completions API and require a
-server-side DeepSeek API key.
+AI language features use an OpenAI-compatible Chat Completions API. Users can
+configure the endpoint, API key, and model from the local web interface or with
+environment variables.
 """
 
 from __future__ import annotations
@@ -44,9 +45,9 @@ MAX_TRANSLATION_SEGMENTS = 20
 MAX_TARGET_CONTEXT_CHARS = 2_000
 MAX_ADJACENT_CONTEXT_CHARS = 1_000
 MAX_BATCH_CONTEXT_CHARS = 24_000
-LLM_API_URL = "https://api.deepseek.com/chat/completions"
+DEFAULT_LLM_BASE_URL = "https://api.deepseek.com"
 DEFAULT_LLM_MODEL = "deepseek-v4-flash"
-LANGUAGE_PROMPT_VERSION = "2026-07-11.2-deepseek"
+LANGUAGE_PROMPT_VERSION = "2026-07-12.1-openai-compatible"
 
 YOUTUBE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 YOUTUBE_INPUT_HOSTS = {
@@ -69,6 +70,8 @@ _CACHE_LOCK = threading.Lock()
 _TRANSCRIPT_INDEX: dict[str, dict[str, Any]] = {}
 _LANGUAGE_CACHE: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
 _LANGUAGE_CACHE_LOCK = threading.Lock()
+_LLM_CONFIG: dict[str, str] = {}
+_LLM_CONFIG_LOCK = threading.Lock()
 
 
 class APIError(Exception):
@@ -710,37 +713,88 @@ def language_capabilities() -> dict[str, Any]:
         "aiLanguage": {
             "available": available,
             "reason": reason,
+            "config": _public_llm_config(),
         },
     }
 
 
-def _llm_config() -> tuple[str, str]:
-    api_key = (
-        os.environ.get("VREPLY_LLM_API_KEY")
-        or os.environ.get("DEEPSEEK_API_KEY")
-        or ""
-    ).strip()
+def _normalize_llm_base_url(value: Any) -> str:
+    if not isinstance(value, str) or not value.strip() or len(value.strip()) > 2048:
+        raise APIError(400, "invalid_llm_base_url", "Enter a valid AI API base URL.")
+    raw_url = value.strip().rstrip("/")
+    try:
+        parts = urlsplit(raw_url)
+        port = parts.port
+    except ValueError as exc:
+        raise APIError(400, "invalid_llm_base_url", "The AI API base URL is malformed.") from exc
+    if (
+        parts.scheme not in {"http", "https"}
+        or not parts.hostname
+        or parts.username is not None
+        or parts.password is not None
+        or parts.query
+        or parts.fragment
+        or port is not None and not 1 <= port <= 65535
+    ):
+        raise APIError(400, "invalid_llm_base_url", "Use a complete http:// or https:// AI API base URL without credentials, query, or fragment.")
+    return raw_url
+
+
+def _llm_endpoint(base_url: str) -> str:
+    return base_url if base_url.endswith("/chat/completions") else base_url + "/chat/completions"
+
+
+def _validate_llm_model(value: Any) -> str:
+    if not isinstance(value, str):
+        raise APIError(400, "invalid_llm_model", "Enter an AI model name.")
+    model = value.strip()
+    if not model or len(model) > 256 or any(ord(character) < 32 for character in model):
+        raise APIError(400, "invalid_llm_model", "The AI model name is invalid.")
+    return model
+
+
+def configure_llm(payload: dict[str, Any]) -> dict[str, Any]:
+    base_url = _normalize_llm_base_url(payload.get("baseUrl"))
+    model = _validate_llm_model(payload.get("model"))
+    api_key_value = payload.get("apiKey")
+    if not isinstance(api_key_value, str) or not api_key_value.strip() or len(api_key_value.strip()) > 4096:
+        raise APIError(400, "invalid_llm_api_key", "Enter an AI API key.")
+    with _LLM_CONFIG_LOCK:
+        _LLM_CONFIG.clear()
+        _LLM_CONFIG.update({"baseUrl": base_url, "apiKey": api_key_value.strip(), "model": model})
+    with _LANGUAGE_CACHE_LOCK:
+        _LANGUAGE_CACHE.clear()
+    return {"ok": True, "aiLanguage": {"available": True, "reason": None, "config": _public_llm_config()}}
+
+
+def _llm_config() -> dict[str, str]:
+    with _LLM_CONFIG_LOCK:
+        runtime_config = dict(_LLM_CONFIG)
+
+    api_key = (runtime_config.get("apiKey") or os.environ.get("VREPLY_LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY") or "").strip()
 
     if not api_key:
         raise APIError(
             503,
             "ai_not_configured",
-            "AI dictionary and translation require a DeepSeek API key.",
+            "Configure an OpenAI-compatible AI API before using translation or dictionary features.",
         )
 
-    model = (
-        os.environ.get("VREPLY_LLM_MODEL")
-        or DEFAULT_LLM_MODEL
-    ).strip()
+    try:
+        base_url = _normalize_llm_base_url(runtime_config.get("baseUrl") or os.environ.get("VREPLY_LLM_BASE_URL") or DEFAULT_LLM_BASE_URL)
+        model = _validate_llm_model(runtime_config.get("model") or os.environ.get("VREPLY_LLM_MODEL") or DEFAULT_LLM_MODEL)
+    except APIError as exc:
+        raise APIError(503, "ai_invalid_config", exc.message) from exc
+    return {"apiKey": api_key, "baseUrl": base_url, "model": model}
 
-    if not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", model):
-        raise APIError(
-            503,
-            "ai_invalid_config",
-            "The configured AI model name is invalid.",
-        )
 
-    return api_key, model
+def _public_llm_config() -> dict[str, Any]:
+    with _LLM_CONFIG_LOCK:
+        runtime_config = dict(_LLM_CONFIG)
+    base_url = runtime_config.get("baseUrl") or os.environ.get("VREPLY_LLM_BASE_URL") or DEFAULT_LLM_BASE_URL
+    model = runtime_config.get("model") or os.environ.get("VREPLY_LLM_MODEL") or DEFAULT_LLM_MODEL
+    has_api_key = bool(runtime_config.get("apiKey") or os.environ.get("VREPLY_LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY"))
+    return {"baseUrl": base_url, "model": model, "hasApiKey": has_api_key, "source": "browser" if runtime_config else "environment"}
 
 
 def _language_cache_key(kind: str, model: str, value: Any) -> str:
@@ -812,6 +866,7 @@ class _NoRedirectHandler(HTTPRedirectHandler):
 
 
 def _post_llm_chat(
+    base_url: str,
     api_key: str,
     model: str,
     messages: list[dict[str, str]],
@@ -822,18 +877,7 @@ def _post_llm_chat(
         "model": model,
         "messages": messages,
 
-        # 字幕翻译、查词不需要复杂推理，关闭 thinking 可降低延迟。
-        "thinking": {
-            "type": "disabled"
-        },
-
         "temperature": 0.2,
-
-        # DeepSeek JSON Output 模式。
-        "response_format": {
-            "type": "json_object"
-        },
-
         "max_tokens": max_output_tokens,
         "stream": False,
     }
@@ -845,7 +889,7 @@ def _post_llm_chat(
     ).encode("utf-8")
 
     request = Request(
-        LLM_API_URL,
+        _llm_endpoint(base_url),
         data=body,
         method="POST",
         headers={
@@ -877,7 +921,7 @@ def _post_llm_chat(
 
         print(
             "\n"
-            "===== DeepSeek API ERROR =====\n"
+            "===== AI API ERROR =====\n"
             f"HTTP Status: {exc.code}\n"
             f"Response: {error_body}\n"
             "==============================\n",
@@ -888,20 +932,20 @@ def _post_llm_chat(
             raise APIError(
                 503,
                 "ai_auth_error",
-                "The DeepSeek API credentials were rejected.",
+                "The AI API credentials were rejected.",
             ) from exc
 
         if exc.code == 429:
             raise APIError(
                 503,
                 "ai_rate_limited",
-                "The DeepSeek API rate limit or quota was exceeded.",
+                "The AI API rate limit or quota was exceeded.",
             ) from exc
 
         raise APIError(
             502,
             "ai_upstream_error",
-            f"DeepSeek returned HTTP {exc.code}. "
+            f"The AI API returned HTTP {exc.code}. "
             "Check the server console for details.",
         ) from exc
 
@@ -909,21 +953,21 @@ def _post_llm_chat(
         raise APIError(
             504,
             "ai_timeout",
-            "DeepSeek took too long to respond.",
+            "The AI API took too long to respond.",
         ) from exc
 
     except (URLError, OSError) as exc:
         raise APIError(
             502,
             "ai_unavailable",
-            "DeepSeek could not be reached.",
+            "The AI API could not be reached. Check the configured base URL.",
         ) from exc
 
     if len(response_body) > MAX_LLM_RESPONSE_BYTES:
         raise APIError(
             502,
             "ai_response_too_large",
-            "The DeepSeek response was unexpectedly large.",
+            "The AI API response was unexpectedly large.",
         )
 
     try:
@@ -934,14 +978,14 @@ def _post_llm_chat(
         raise APIError(
             502,
             "ai_invalid_response",
-            "DeepSeek returned unreadable JSON.",
+            "The AI API returned unreadable JSON.",
         ) from exc
 
     if not isinstance(response_payload, dict):
         raise APIError(
             502,
             "ai_invalid_response",
-            "DeepSeek returned malformed response data.",
+            "The AI API returned malformed response data.",
         )
 
     return response_payload
@@ -949,6 +993,7 @@ def _post_llm_chat(
 
 def _call_llm_structured(
     *,
+    base_url: str,
     api_key: str,
     model: str,
     schema_name: str,
@@ -958,7 +1003,7 @@ def _call_llm_structured(
     max_output_tokens: int,
 ) -> dict[str, Any]:
 
-    # 为 DeepSeek 提供明确的 JSON 输出示例。
+    # A concrete example improves JSON reliability across compatible providers.
     if schema_name == "vreply_translations":
         json_example = {
             "translations": [
@@ -1026,6 +1071,7 @@ def _call_llm_structured(
     ]
 
     response = _post_llm_chat(
+        base_url,
         api_key,
         model,
         messages,
@@ -1044,7 +1090,7 @@ def _call_llm_structured(
     except (KeyError, IndexError, TypeError) as exc:
         print(
             "\n"
-            "===== UNEXPECTED DEEPSEEK RESPONSE =====\n"
+            "===== UNEXPECTED AI RESPONSE =====\n"
             f"{json.dumps(response, ensure_ascii=False, indent=2)}\n"
             "========================================\n",
             flush=True,
@@ -1053,14 +1099,14 @@ def _call_llm_structured(
         raise APIError(
             502,
             "ai_invalid_response",
-            "DeepSeek returned an unexpected response structure.",
+            "The AI API returned an unexpected response structure.",
         ) from exc
 
     if not isinstance(content, str) or not content.strip():
         raise APIError(
             502,
             "ai_invalid_response",
-            "DeepSeek returned an empty answer.",
+            "The AI API returned an empty answer.",
         )
 
     try:
@@ -1069,7 +1115,7 @@ def _call_llm_structured(
     except json.JSONDecodeError as exc:
         print(
             "\n"
-            "===== INVALID DEEPSEEK JSON =====\n"
+            "===== INVALID AI JSON =====\n"
             f"{content}\n"
             "=================================\n",
             flush=True,
@@ -1078,14 +1124,14 @@ def _call_llm_structured(
         raise APIError(
             502,
             "ai_invalid_response",
-            "The DeepSeek answer was not valid JSON.",
+            "The AI answer was not valid JSON.",
         ) from exc
 
     if not isinstance(result, dict):
         raise APIError(
             502,
             "ai_invalid_response",
-            "The DeepSeek answer had the wrong shape.",
+            "The AI answer had the wrong shape.",
         )
 
     return result
@@ -1146,7 +1192,8 @@ def _validate_target_language(value: Any) -> str:
 
 
 def translate_segments(payload: dict[str, Any]) -> dict[str, Any]:
-    api_key, model = _llm_config()
+    llm = _llm_config()
+    api_key, base_url, model = llm["apiKey"], llm["baseUrl"], llm["model"]
     transcript = _get_transcript(payload.get("transcriptId"))
     target_language = _validate_target_language(payload.get("targetLanguage"))
     segment_ids = payload.get("segmentIds")
@@ -1171,7 +1218,7 @@ def translate_segments(payload: dict[str, Any]) -> dict[str, Any]:
     cache_keys: dict[int, str] = {}
     for context in contexts:
         segment_id = int(context["segmentId"])
-        key = _language_cache_key("translation", model, [target_language, context])
+        key = _language_cache_key("translation", f"{base_url}|{model}", [target_language, context])
         cache_keys[segment_id] = key
         cached = _language_cache_get(key)
         if cached is None:
@@ -1182,6 +1229,7 @@ def translate_segments(payload: dict[str, Any]) -> dict[str, Any]:
     generated_by_id: dict[int, dict[str, Any]] = {}
     if missing:
         generated = _call_llm_structured(
+            base_url=base_url,
             api_key=api_key,
             model=model,
             schema_name="vreply_translations",
@@ -1248,7 +1296,8 @@ def translate_segments(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def define_selection(payload: dict[str, Any]) -> dict[str, Any]:
-    api_key, model = _llm_config()
+    llm = _llm_config()
+    api_key, base_url, model = llm["apiKey"], llm["baseUrl"], llm["model"]
     transcript = _get_transcript(payload.get("transcriptId"))
     target_language = _validate_target_language(payload.get("targetLanguage"))
     segment_id = payload.get("segmentId")
@@ -1271,12 +1320,13 @@ def define_selection(payload: dict[str, Any]) -> dict[str, Any]:
         if re.search(word_pattern, context_text, flags=re.IGNORECASE | re.UNICODE) is None:
             raise APIError(400, "selection_not_in_segment", "The selected word is not in this transcript line.")
 
-    key = _language_cache_key("dictionary", model, [target_language, selection.casefold(), context])
+    key = _language_cache_key("dictionary", f"{base_url}|{model}", [target_language, selection.casefold(), context])
     cached = _language_cache_get(key)
     if cached is not None:
         return {"ok": True, "entry": {**cached, "cached": True}}
 
     generated = _call_llm_structured(
+        base_url=base_url,
         api_key=api_key,
         model=model,
         schema_name="vreply_dictionary_entry",
@@ -1339,7 +1389,7 @@ class VReplyHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlsplit(self.path).path
-        if path not in {"/api/transcribe", "/api/translate", "/api/dictionary"}:
+        if path not in {"/api/transcribe", "/api/translate", "/api/dictionary", "/api/llm-config"}:
             self._send_api_error(APIError(404, "not_found", "API endpoint not found."))
             return
 
@@ -1375,6 +1425,8 @@ class VReplyHandler(SimpleHTTPRequestHandler):
                 result = {"ok": True, **transcribe_youtube(payload.get("url"))}
             elif path == "/api/translate":
                 result = translate_segments(payload)
+            elif path == "/api/llm-config":
+                result = configure_llm(payload)
             else:
                 result = define_selection(payload)
         except APIError as error:

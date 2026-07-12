@@ -15,7 +15,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Sans:wdth,wght@75..100,400..700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260711-language" />
+    <link rel="stylesheet" href="styles.css?v=20260712-llm-settings" />
   </head>
   <body>
     <div class="page-noise" aria-hidden="true"></div>
@@ -30,6 +30,13 @@
       </button>
 
       <div class="header-actions">
+        <button class="quiet-button" id="aiSettingsButton" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
+            <circle cx="12" cy="12" r="3.3" />
+          </svg>
+          AI settings
+        </button>
         <button class="quiet-button is-hidden" id="newVideoButton" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />
@@ -252,6 +259,42 @@
       </section>
     </main>
 
+    <div class="settings-backdrop is-hidden" id="aiSettingsModal" role="presentation">
+      <section class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="aiSettingsTitle">
+        <header class="settings-heading">
+          <div>
+            <span class="settings-kicker">Language engine</span>
+            <h2 id="aiSettingsTitle">Connect your AI</h2>
+          </div>
+          <button class="settings-close" id="aiSettingsClose" type="button" aria-label="Close AI settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+          </button>
+        </header>
+        <p class="settings-intro">Use any provider with an OpenAI-compatible <code>/chat/completions</code> endpoint. Your key is sent only to this local VReply server and is kept in memory until the server stops.</p>
+        <form id="aiSettingsForm" class="settings-form">
+          <label>
+            <span>API base URL</span>
+            <input id="aiBaseUrl" name="baseUrl" type="url" required autocomplete="url" placeholder="https://api.deepseek.com" />
+            <small>Enter the provider base URL or the full <code>/chat/completions</code> URL.</small>
+          </label>
+          <label>
+            <span>Model</span>
+            <input id="aiModel" name="model" type="text" required autocomplete="off" placeholder="deepseek-v4-flash" />
+          </label>
+          <label>
+            <span>API key</span>
+            <input id="aiApiKey" name="apiKey" type="password" required autocomplete="off" placeholder="Paste your API key" />
+            <small id="aiKeyHint">The existing key is never returned to the browser.</small>
+          </label>
+          <p class="settings-error" id="aiSettingsError" role="alert"></p>
+          <div class="settings-footer">
+            <span id="aiConfigStatus">Not configured</span>
+            <button class="settings-save" id="aiSettingsSave" type="submit">Save connection</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
     <div class="toast" id="toast" role="status" aria-live="polite">
       <span class="toast-icon">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 12 4 4 8-9" /></svg>
@@ -265,6 +308,6 @@
     <script>
       window.VREPLY_TRANSCRIBE_ENDPOINT = "/api/transcribe";
     </script>
-    <script src="app.js?v=20260711-language"></script>
+    <script src="app.js?v=20260712-llm-settings"></script>
   </body>
 </html>

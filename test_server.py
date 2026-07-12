@@ -66,6 +66,8 @@ class LanguageServiceTests(unittest.TestCase):
             server._TRANSCRIPT_INDEX.clear()
         with server._LANGUAGE_CACHE_LOCK:
             server._LANGUAGE_CACHE.clear()
+        with server._LLM_CONFIG_LOCK:
+            server._LLM_CONFIG.clear()
 
         self.transcript = {
             "segments": [
@@ -81,7 +83,11 @@ class LanguageServiceTests(unittest.TestCase):
     def _env(self):
         return patch.dict(
             os.environ,
-            {"VREPLY_LLM_API_KEY": "test-key", "VREPLY_LLM_MODEL": "test-model"},
+            {
+                "VREPLY_LLM_API_KEY": "test-key",
+                "VREPLY_LLM_BASE_URL": "https://example.test/v1",
+                "VREPLY_LLM_MODEL": "test-model",
+            },
         )
 
     def test_missing_key_is_reported_without_breaking_capabilities(self) -> None:
@@ -117,7 +123,7 @@ class LanguageServiceTests(unittest.TestCase):
             "segmentIds": [2],
             "targetLanguage": "zh-CN",
         }
-        with self._env(), patch.object(server, "_call_openai_structured", side_effect=fake_call):
+        with self._env(), patch.object(server, "_call_llm_structured", side_effect=fake_call):
             first = server.translate_segments(payload)
             second = server.translate_segments(payload)
 
@@ -149,7 +155,7 @@ class LanguageServiceTests(unittest.TestCase):
             "selection": "take off",
             "targetLanguage": "zh-CN",
         }
-        with self._env(), patch.object(server, "_call_openai_structured", side_effect=fake_call):
+        with self._env(), patch.object(server, "_call_llm_structured", side_effect=fake_call):
             first = server.define_selection(payload)
             second = server.define_selection(payload)
 
@@ -185,7 +191,7 @@ class LanguageServiceTests(unittest.TestCase):
     def test_translation_rejects_missing_model_results(self) -> None:
         with self._env(), patch.object(
             server,
-            "_call_openai_structured",
+            "_call_llm_structured",
             return_value={"translations": []},
         ), self.assertRaises(server.APIError) as raised:
             server.translate_segments(
@@ -200,7 +206,7 @@ class LanguageServiceTests(unittest.TestCase):
     def test_translation_rejects_boolean_model_segment_id(self) -> None:
         with self._env(), patch.object(
             server,
-            "_call_openai_structured",
+            "_call_llm_structured",
             return_value={"translations": [{"segmentId": True, "text": "译文", "note": ""}]},
         ), self.assertRaises(server.APIError) as raised:
             server.translate_segments(
@@ -218,16 +224,45 @@ class LanguageServiceTests(unittest.TestCase):
             server._segment_context(transcript, 1)
         self.assertEqual(raised.exception.code, "context_too_large")
 
-    def test_response_parser_maps_malformed_and_incomplete_answers_to_api_errors(self) -> None:
-        cases = [
-            {"output": None},
-            {"output": [{"type": "message", "content": None}]},
-            {"status": "incomplete", "output": []},
-        ]
+    def test_chat_parser_maps_malformed_answers_to_api_errors(self) -> None:
+        cases = [{"choices": None}, {"choices": []}, {"choices": [{"message": {"content": None}}]}]
         for response in cases:
-            with self.subTest(response=response), self.assertRaises(server.APIError) as raised:
-                server._response_output_text(response)
+            with self.subTest(response=response), patch.object(
+                server, "_post_llm_chat", return_value=response
+            ), self.assertRaises(server.APIError) as raised:
+                server._call_llm_structured(
+                    base_url="https://example.test/v1",
+                    api_key="test-key",
+                    model="test-model",
+                    schema_name="test",
+                    schema={"type": "object"},
+                    instructions="Return JSON.",
+                    input_data={},
+                    max_output_tokens=100,
+                )
             self.assertEqual(raised.exception.status, 502)
+
+    def test_browser_configuration_is_used_and_key_is_never_exposed(self) -> None:
+        result = server.configure_llm(
+            {
+                "baseUrl": "https://api.example.com/v1/",
+                "apiKey": "secret-key",
+                "model": "example/model-1",
+            }
+        )
+
+        self.assertTrue(result["aiLanguage"]["available"])
+        self.assertNotIn("apiKey", result["aiLanguage"]["config"])
+        self.assertTrue(result["aiLanguage"]["config"]["hasApiKey"])
+        self.assertEqual(server._llm_config()["baseUrl"], "https://api.example.com/v1")
+        self.assertEqual(server._llm_endpoint(server._llm_config()["baseUrl"]), "https://api.example.com/v1/chat/completions")
+
+    def test_configuration_rejects_credentials_in_base_url(self) -> None:
+        with self.assertRaises(server.APIError) as raised:
+            server.configure_llm(
+                {"baseUrl": "https://user:pass@example.com/v1", "apiKey": "key", "model": "model"}
+            )
+        self.assertEqual(raised.exception.code, "invalid_llm_base_url")
 
 
 if __name__ == "__main__":

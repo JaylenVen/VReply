@@ -9,6 +9,17 @@
     workspaceView: document.getElementById("workspaceView"),
     brandButton: document.getElementById("brandButton"),
     newVideoButton: document.getElementById("newVideoButton"),
+    aiSettingsButton: document.getElementById("aiSettingsButton"),
+    aiSettingsModal: document.getElementById("aiSettingsModal"),
+    aiSettingsClose: document.getElementById("aiSettingsClose"),
+    aiSettingsForm: document.getElementById("aiSettingsForm"),
+    aiBaseUrl: document.getElementById("aiBaseUrl"),
+    aiModel: document.getElementById("aiModel"),
+    aiApiKey: document.getElementById("aiApiKey"),
+    aiKeyHint: document.getElementById("aiKeyHint"),
+    aiSettingsError: document.getElementById("aiSettingsError"),
+    aiSettingsSave: document.getElementById("aiSettingsSave"),
+    aiConfigStatus: document.getElementById("aiConfigStatus"),
     urlForm: document.getElementById("urlForm"),
     videoUrl: document.getElementById("videoUrl"),
     urlField: document.getElementById("urlField"),
@@ -85,6 +96,7 @@
     transcriptId: null,
     interactiveReady: false,
     languageAvailable: false,
+    llmConfig: null,
     showTranslations: false,
     revealedTranslations: new Set(),
     translations: new Map(),
@@ -809,10 +821,10 @@
     elements.translationToggle.setAttribute("aria-pressed", String(state.showTranslations));
     elements.translationToggle.title = state.languageAvailable
       ? "显示或隐藏简体中文翻译"
-      : "请在服务器配置 OPENAI_API_KEY 以启用 AI 翻译";
+      : "请先在 AI settings 中配置模型服务";
     elements.languageStatus.textContent = state.languageAvailable
       ? "AI 翻译已就绪。"
-      : "AI 翻译尚未配置，请在服务器设置 OPENAI_API_KEY。";
+      : "AI 翻译尚未配置，请打开 AI settings。";
   }
 
   function updateTranslationNode(node, index) {
@@ -865,7 +877,7 @@
 
   function revealTranslation(index) {
     if (!state.languageAvailable) {
-      showToast("AI 翻译尚未配置", "请在 VReply 服务器设置 OPENAI_API_KEY 后重启。");
+      showToast("AI 翻译尚未配置", "请打开 AI settings 填写 API 信息。");
       return;
     }
     if (state.revealedTranslations.has(index) && !state.showTranslations) {
@@ -976,13 +988,70 @@
     return payload || {};
   }
 
+  function applyLanguageCapabilities(payload) {
+    const language = payload && payload.aiLanguage ? payload.aiLanguage : {};
+    state.languageAvailable = Boolean(language.available);
+    state.llmConfig = language.config || null;
+    updateTranslationToggle();
+    if (state.transcript.length) renderTranscript(elements.transcriptSearch.value);
+  }
+
+  function openAiSettings() {
+    const config = state.llmConfig || {};
+    elements.aiBaseUrl.value = config.baseUrl || "https://api.deepseek.com";
+    elements.aiModel.value = config.model || "deepseek-v4-flash";
+    elements.aiApiKey.value = "";
+    elements.aiSettingsError.textContent = "";
+    elements.aiConfigStatus.textContent = state.languageAvailable
+      ? `Connected · ${config.model || "model configured"}`
+      : "Not configured";
+    elements.aiKeyHint.textContent = config.hasApiKey
+      ? "A key is configured, but is never returned to the browser. Paste a key to replace it."
+      : "The key stays in server memory and is cleared when the server stops.";
+    elements.aiSettingsModal.classList.remove("is-hidden");
+    window.requestAnimationFrame(() => elements.aiBaseUrl.focus());
+  }
+
+  function closeAiSettings() {
+    elements.aiSettingsModal.classList.add("is-hidden");
+    elements.aiSettingsError.textContent = "";
+  }
+
+  async function saveAiSettings(event) {
+    event.preventDefault();
+    elements.aiSettingsError.textContent = "";
+    elements.aiSettingsSave.disabled = true;
+    elements.aiSettingsSave.textContent = "Connecting…";
+    try {
+      const response = await fetch("/api/llm-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baseUrl: elements.aiBaseUrl.value,
+          model: elements.aiModel.value,
+          apiKey: elements.aiApiKey.value,
+        }),
+      });
+      const payload = await readApiPayload(response, "AI configuration could not be saved.");
+      applyLanguageCapabilities(payload);
+      closeAiSettings();
+      showToast("AI connection saved", `${state.llmConfig.model} is ready for translations.`);
+    } catch (error) {
+      elements.aiSettingsError.textContent = error.message;
+    } finally {
+      elements.aiSettingsSave.disabled = false;
+      elements.aiSettingsSave.textContent = "Save connection";
+    }
+  }
+
   async function loadLanguageCapabilities() {
     try {
       const response = await fetch("/api/capabilities", { headers: { Accept: "application/json" } });
       const payload = await readApiPayload(response, "AI 语言功能暂时不可用。");
-      state.languageAvailable = Boolean(payload.aiLanguage && payload.aiLanguage.available);
+      applyLanguageCapabilities(payload);
     } catch (_error) {
       state.languageAvailable = false;
+      state.llmConfig = null;
     } finally {
       updateTranslationToggle();
       if (state.transcript.length) renderTranscript(elements.transcriptSearch.value);
@@ -1037,7 +1106,7 @@
     state.dictionaryController = null;
     openDictionary(selection);
     if (!state.languageAvailable) {
-      showDictionaryError("AI 语境词典尚未配置。请在 VReply 服务器设置 OPENAI_API_KEY 后重启。");
+      showDictionaryError("AI 语境词典尚未配置。请打开 AI settings 填写 API 信息。");
       return;
     }
     if (!state.transcriptId) {
@@ -1320,6 +1389,12 @@
   });
 
   elements.videoUrl.addEventListener("input", clearFieldError);
+  elements.aiSettingsButton.addEventListener("click", openAiSettings);
+  elements.aiSettingsClose.addEventListener("click", closeAiSettings);
+  elements.aiSettingsForm.addEventListener("submit", saveAiSettings);
+  elements.aiSettingsModal.addEventListener("click", (event) => {
+    if (event.target === elements.aiSettingsModal) closeAiSettings();
+  });
   elements.brandButton.addEventListener("click", () => {
     if (!elements.workspaceView.classList.contains("is-hidden")) returnHome();
   });
@@ -1419,6 +1494,11 @@
   elements.transcriptList.addEventListener("pointerup", () => window.setTimeout(lookupSelectedPhrase, 0));
 
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !elements.aiSettingsModal.classList.contains("is-hidden")) {
+      event.preventDefault();
+      closeAiSettings();
+      return;
+    }
     if (elements.workspaceView.classList.contains("is-hidden")) return;
     if (event.key === "Escape" && !elements.dictionaryCard.classList.contains("is-hidden")) {
       event.preventDefault();
