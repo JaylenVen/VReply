@@ -2,6 +2,7 @@
   "use strict";
 
   const DEFAULT_DURATION = 150;
+  const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3];
   const TRANSLATION_ENGINE_KEY = "vreply:translation-engine";
 
   function initialTranslationEngine() {
@@ -40,6 +41,7 @@
     urlField: document.getElementById("urlField"),
     urlError: document.getElementById("urlError"),
     projectTitle: document.getElementById("projectTitle"),
+    videoAmbient: document.getElementById("videoAmbient"),
     videoMount: document.getElementById("videoMount"),
     videoPlaceholder: document.getElementById("videoPlaceholder"),
     captionOverlay: document.getElementById("captionOverlay"),
@@ -56,7 +58,13 @@
     durationTime: document.getElementById("durationTime"),
     progressRange: document.getElementById("progressRange"),
     progressFill: document.getElementById("progressFill"),
-    speedSelect: document.getElementById("speedSelect"),
+    speedButton: document.getElementById("speedButton"),
+    speedButtonValue: document.getElementById("speedButtonValue"),
+    speedPopover: document.getElementById("speedPopover"),
+    speedRange: document.getElementById("speedRange"),
+    speedValue: document.getElementById("speedValue"),
+    volumeButton: document.getElementById("volumeButton"),
+    volumePopover: document.getElementById("volumePopover"),
     volumeRange: document.getElementById("volumeRange"),
     volumeValue: document.getElementById("volumeValue"),
     loopButton: document.getElementById("loopButton"),
@@ -137,16 +145,21 @@
 
   let youTubeApiPromise = null;
 
+  function userMessage(value, fallback) {
+    const text = String(value || "").trim();
+    return /[\u3400-\u9fff]/u.test(text) ? text : fallback;
+  }
+
   function parseVideoUrl(value) {
     let raw = String(value || "").trim();
-    if (!raw) return { error: "Paste a video link to begin." };
+    if (!raw) return { error: "请先粘贴视频链接。" };
     if (!/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
 
     let url;
     try {
       url = new URL(raw);
     } catch (_error) {
-      return { error: "That link does not look quite right." };
+      return { error: "这个链接似乎不完整，请检查后重试。" };
     }
 
     const host = url.hostname.toLowerCase().replace(/^www\./, "");
@@ -171,7 +184,7 @@
     }
 
     return {
-      error: "VReply currently supports YouTube links.",
+      error: "目前仅支持 YouTube 视频链接。",
     };
   }
 
@@ -208,6 +221,7 @@
     state.simulatedPlayback = false;
     setPlaying(false);
     cleanupPlayer();
+    closeTuningPopovers();
     closeDictionary();
     updateTranslationToggle();
 
@@ -222,7 +236,7 @@
     elements.searchRow.classList.add("is-hidden");
     elements.searchResultCount.textContent = "0";
     elements.captionOverlay.classList.remove("is-visible");
-    elements.captionText.textContent = "Your current sentence will appear here.";
+    elements.captionText.textContent = "当前句子会显示在这里。";
     elements.captionTranslation.textContent = "译文将在开启翻译后显示";
     elements.captionTranslation.classList.remove("is-loading", "has-error");
     elements.extractOverlay.classList.remove("is-complete");
@@ -231,7 +245,7 @@
     elements.workspaceView.setAttribute("aria-busy", "true");
     setInteractiveReady(false);
 
-    elements.projectTitle.textContent = "Imported video";
+    elements.projectTitle.textContent = "已导入的视频";
     elements.transcriptCount.textContent = "0";
 
     mountVideo(source, token);
@@ -241,26 +255,26 @@
     const phases = [
       {
         progress: 28,
-        title: "Opening the source…",
-        detail: "The video is ready. Listening for every voice.",
+        title: "正在打开视频…",
+        detail: "视频已就绪，正在读取语音内容。",
         wait: 290,
       },
       {
         progress: 59,
-        title: "Hearing the conversation…",
-        detail: "Separating natural phrases from pauses and music.",
+        title: "正在识别对话…",
+        detail: "正在区分自然停顿、对话与背景音乐。",
         wait: 390,
       },
       {
         progress: 86,
-        title: "Timing every sentence…",
-        detail: "Matching each line to the exact playback moment.",
+        title: "正在校准字幕…",
+        detail: "正在让每一句字幕准确跟上画面。",
         wait: 410,
       },
       {
         progress: 92,
-        title: "Finishing the transcript…",
-        detail: "Checking the timing before your practice begins.",
+        title: "字幕即将完成…",
+        detail: "开始练习前，再检查一次时间轴。",
         wait: 300,
       },
     ];
@@ -301,8 +315,8 @@
     renderTranscript("");
     updatePlaybackUI(0, true);
 
-    elements.extractTitle.textContent = "Your transcript is ready.";
-    elements.extractDetail.textContent = "You can now listen, jump, loop and speak along.";
+    elements.extractTitle.textContent = "字幕已准备好。";
+    elements.extractDetail.textContent = "现在可以逐句听、循环练，跟着开口了。";
     elements.extractProgress.style.width = "100%";
     await delay(170);
     elements.extractOverlay.classList.add("is-complete");
@@ -322,11 +336,11 @@
           signal: controller.signal,
         });
         if (!response.ok) {
-          let message = "The transcription service could not read this video.";
+          let message = "暂时无法读取这个视频的字幕。";
           try {
             const failure = await response.json();
-            if (typeof failure.error === "string") message = failure.error;
-            else if (failure.error && failure.error.message) message = String(failure.error.message);
+            if (typeof failure.error === "string") message = userMessage(failure.error, message);
+            else if (failure.error && failure.error.message) message = userMessage(failure.error.message, message);
           } catch (_error) {
             // Keep the user-facing fallback message.
           }
@@ -336,10 +350,10 @@
         const segments = normalizeSegments(payload.segments);
         const transcriptId = typeof payload.transcriptId === "string" ? payload.transcriptId : null;
         if (segments.length && transcriptId) return { segments, transcriptId };
-        throw new Error("No spoken English captions were found for this video.");
+        throw new Error("这个视频没有可用的英文字幕。");
       } catch (error) {
         if (error.name === "AbortError") {
-          throw new Error("Transcription took too long. Please try again.");
+          throw new Error("字幕读取时间过长，请稍后重试。");
         }
         throw error;
       } finally {
@@ -347,7 +361,7 @@
       }
     }
 
-    throw new Error("The transcription service is not configured.");
+    throw new Error("字幕服务尚未配置。");
   }
 
   function normalizeSegments(segments) {
@@ -399,7 +413,9 @@
       elements.playButton,
       elements.forwardButton,
       elements.progressRange,
-      elements.speedSelect,
+      elements.speedButton,
+      elements.speedRange,
+      elements.volumeButton,
       elements.volumeRange,
       elements.loopButton,
       elements.followToggle,
@@ -412,9 +428,7 @@
   }
 
   function showTranscriptionFailure(error) {
-    const message = error && error.message
-      ? error.message
-      : "VReply could not create a transcript for this source.";
+    const message = userMessage(error && error.message, "暂时无法为这个视频生成字幕。");
     state.transcript = [];
     state.transcriptId = null;
     state.activeIndex = -1;
@@ -423,16 +437,19 @@
     elements.workspaceView.setAttribute("aria-busy", "false");
     elements.extractOverlay.classList.add("has-error");
     elements.extractProgress.style.width = "100%";
-    elements.extractTitle.textContent = "We couldn’t create this transcript.";
+    elements.extractTitle.textContent = "字幕读取失败。";
     elements.extractDetail.textContent = message;
     setInteractiveReady(false);
-    showToast("Transcript unavailable", message);
+    showToast("字幕暂不可用", message);
   }
 
   function mountVideo(source, token) {
     state.playerKind = source.kind;
     state.playerReady = false;
     elements.videoMount.replaceChildren();
+    elements.videoAmbient.style.backgroundImage = source.kind === "youtube"
+      ? `linear-gradient(rgba(8, 12, 9, 0.44), rgba(8, 12, 9, 0.74)), url("https://i.ytimg.com/vi/${source.id}/maxresdefault.jpg")`
+      : "";
     elements.videoPlaceholder.classList.remove("is-hidden");
 
     if (source.kind === "direct") {
@@ -441,7 +458,7 @@
       video.preload = "metadata";
       video.playsInline = true;
       video.volume = state.volume / 100;
-      video.setAttribute("aria-label", "Imported video");
+      video.setAttribute("aria-label", "已导入的视频");
       video.addEventListener("loadedmetadata", () => {
         if (token !== state.loadToken) return;
         state.playerReady = true;
@@ -523,7 +540,7 @@
       const script = document.createElement("script");
       script.src = "https://www.youtube.com/iframe_api";
       script.async = true;
-      script.onerror = () => reject(new Error("YouTube player could not load"));
+      script.onerror = () => reject(new Error("YouTube 播放器加载失败"));
       document.head.appendChild(script);
     });
 
@@ -558,7 +575,7 @@
     state.playerReady = false;
     state.simulatedPlayback = true;
     elements.videoPlaceholder.classList.remove("is-hidden");
-    showToast("Practice mode is ready", "The source preview is blocked, so controls use the transcript timeline.");
+    showToast("已切换为字幕练习", "视频预览受限，但仍可通过字幕时间轴继续练习。");
   }
 
   function cleanupPlayer() {
@@ -602,7 +619,7 @@
   function setPlaying(playing) {
     state.playing = Boolean(playing);
     elements.playButton.classList.toggle("is-playing", state.playing);
-    elements.playButton.setAttribute("aria-label", state.playing ? "Pause video" : "Play video");
+    elements.playButton.setAttribute("aria-label", state.playing ? "暂停视频" : "播放视频");
   }
 
   function seekTo(value, options) {
@@ -788,7 +805,7 @@
       time.type = "button";
       time.className = "line-time";
       time.textContent = shortTime(segment.start);
-      time.setAttribute("aria-label", `Play line ${index + 1} at ${formatTime(segment.start)}`);
+      time.setAttribute("aria-label", `从 ${formatTime(segment.start)} 播放第 ${index + 1} 句`);
 
       const content = document.createElement("div");
       content.className = "line-content";
@@ -851,19 +868,19 @@
 
   function chromeAvailabilityText() {
     if (!("Translator" in self) || state.chromeTranslationAvailability === "unavailable") {
-      return "Unavailable in this browser. Use desktop Chrome 138 or newer.";
+      return "当前浏览器不支持，请使用桌面版 Chrome 138 或更高版本。";
     }
-    if (state.chromeTranslationAvailability === "checking") return "Checking browser support…";
+    if (state.chromeTranslationAvailability === "checking") return "正在检查浏览器支持情况…";
     if (state.chromeTranslationAvailability === "downloading") {
-      return `Downloading English–Chinese language pack… ${state.chromeDownloadProgress}%`;
+      return `正在下载中英语言包… ${state.chromeDownloadProgress}%`;
     }
     if (state.chromeTranslationAvailability === "downloadable") {
-      return "Supported. The language pack downloads on first use.";
+      return "可以使用，首次翻译时会下载语言包。";
     }
     if (state.chromeTranslationAvailability === "error") {
-      return "Language pack setup failed. Click translation to try again.";
+      return "语言包准备失败，请重新点击翻译。";
     }
-    return "Ready on this device. Subtitle text stays in the browser.";
+    return "已就绪，字幕内容只在当前浏览器中处理。";
   }
 
   function syncTranslationSettingsForm(engine = state.translationEngine) {
@@ -893,10 +910,10 @@
     } else {
       elements.translationToggle.title = state.languageAvailable
         ? "使用自定义 API 显示或隐藏简体中文译文"
-        : "请打开 Translation 设置并配置模型 API";
+        : "请打开翻译设置并配置模型 API";
       elements.languageStatus.textContent = state.languageAvailable
         ? "自定义 API 翻译已就绪。"
-        : "API 翻译尚未配置，请打开 Translation 设置。";
+        : "API 翻译尚未配置，请打开翻译设置。";
     }
     elements.chromeTranslationStatus.textContent = chromeAvailabilityText();
     elements.chromeEngineOption.classList.toggle(
@@ -919,8 +936,8 @@
     node.setAttribute(
       "aria-label",
       state.showTranslations
-        ? `Translation for line ${index + 1} is shown by the global control`
-        : `${revealed ? "Hide" : "Show"} translation for line ${index + 1}`
+        ? `第 ${index + 1} 句译文已显示`
+        : `${revealed ? "隐藏" : "显示"}第 ${index + 1} 句译文`
     );
     text.setAttribute("aria-hidden", String(!revealed));
     if (translation) text.textContent = translation.text;
@@ -1065,7 +1082,7 @@
       }
     }
     if (!state.languageAvailable) {
-      showToast("API 翻译尚未配置", "请打开 Translation 设置填写 API 信息。");
+      showToast("API 翻译尚未配置", "请打开翻译设置填写 API 信息。");
       return false;
     }
     return true;
@@ -1192,7 +1209,7 @@
     }
     if (!response.ok) {
       const message = payload && payload.error && payload.error.message;
-      throw new Error(message ? String(message) : fallback);
+      throw new Error(userMessage(message, fallback));
     }
     return payload || {};
   }
@@ -1213,13 +1230,13 @@
     elements.aiSettingsError.textContent = "";
     syncTranslationSettingsForm();
     elements.aiConfigStatus.textContent = state.translationEngine === "chrome"
-      ? "Chrome translation selected"
+      ? "已选择 Chrome 本地翻译"
       : state.languageAvailable
-        ? `API connected · ${config.model || "model configured"}`
-        : "API not configured";
+        ? `API 已连接 · ${config.model || "模型已配置"}`
+        : "API 尚未配置";
     elements.aiKeyHint.textContent = config.hasApiKey
-      ? "A key is configured, but is never returned to the browser. Paste a key to replace it."
-      : "The key stays in server memory and is cleared when the server stops.";
+      ? "密钥已配置且不会返回浏览器；粘贴新密钥即可替换。"
+      : "密钥只保存在服务进程内存中，服务停止后会自动清除。";
     elements.aiSettingsModal.classList.remove("is-hidden");
     window.requestAnimationFrame(() => {
       if (state.translationEngine === "chrome") elements.translationEngineChrome.focus();
@@ -1237,11 +1254,11 @@
     const engine = elements.translationEngineChrome.checked ? "chrome" : "api";
     elements.aiSettingsError.textContent = "";
     elements.aiSettingsSave.disabled = true;
-    elements.aiSettingsSave.textContent = "Saving…";
+    elements.aiSettingsSave.textContent = "正在保存…";
     try {
       if (engine === "chrome") {
         if (state.chromeTranslationAvailability === "unavailable") {
-          throw new Error("此浏览器不支持 Chrome 内置翻译，请选择 Custom model API。");
+          throw new Error("当前浏览器不支持 Chrome 本地翻译，请改用自定义模型 API。");
         }
         setTranslationEngine("chrome");
       } else {
@@ -1250,10 +1267,10 @@
           && elements.aiBaseUrl.value.trim() === String(config.baseUrl || "")
           && elements.aiModel.value.trim() === String(config.model || "");
         if (!elements.aiApiKey.value.trim() && !sameExistingConfig) {
-          throw new Error("使用 API 翻译时，请填写 API base URL、模型名称和 API key。");
+          throw new Error("使用 API 翻译时，请填写 API 地址、模型名称和密钥。");
         }
         if (!elements.aiBaseUrl.value.trim() || !elements.aiModel.value.trim()) {
-          throw new Error("请填写 API base URL 和模型名称。");
+          throw new Error("请填写 API 地址和模型名称。");
         }
         if (!sameExistingConfig || elements.aiApiKey.value.trim()) {
           const response = await fetch("/api/llm-config", {
@@ -1265,21 +1282,21 @@
               apiKey: elements.aiApiKey.value,
             }),
           });
-          const payload = await readApiPayload(response, "AI configuration could not be saved.");
+          const payload = await readApiPayload(response, "暂时无法保存模型配置。");
           applyLanguageCapabilities(payload);
         }
         setTranslationEngine("api");
       }
       closeAiSettings();
       showToast(
-        "Translation settings saved",
-        engine === "chrome" ? "Chrome will translate subtitles on this device." : `${state.llmConfig.model} will translate subtitles through the API.`
+        "翻译设置已保存",
+        engine === "chrome" ? "字幕将在当前设备上完成翻译。" : `将通过 ${state.llmConfig.model} 翻译字幕。`
       );
     } catch (error) {
       elements.aiSettingsError.textContent = error.message;
     } finally {
       elements.aiSettingsSave.disabled = false;
-      elements.aiSettingsSave.textContent = "Save settings";
+      elements.aiSettingsSave.textContent = "保存设置";
     }
   }
 
@@ -1461,8 +1478,14 @@
     }
   }
 
-  function setPlaybackSpeed(value) {
-    state.speed = Number(value) || 1;
+  function setPlaybackSpeed(index) {
+    const speedIndex = Math.max(0, Math.min(SPEEDS.length - 1, Number(index) || 0));
+    state.speed = SPEEDS[speedIndex];
+    const label = `${state.speed}${state.speed === 2 || state.speed === 3 ? ".0" : ""}×`;
+    elements.speedValue.value = label;
+    elements.speedButtonValue.textContent = label;
+    elements.speedRange.setAttribute("aria-valuetext", label);
+    elements.speedRange.style.setProperty("--fill", `${(speedIndex / (SPEEDS.length - 1)) * 100}%`);
 
     if (state.playerKind === "youtube" && state.playerReady && state.ytPlayer) {
       state.ytPlayer.setPlaybackRate(state.speed);
@@ -1475,7 +1498,7 @@
   function setVolume(value) {
     state.volume = Math.max(0, Math.min(100, Number(value) || 0));
     elements.volumeValue.value = `${state.volume}%`;
-    elements.volumeRange.style.setProperty("--volume", `${state.volume}%`);
+    elements.volumeRange.style.setProperty("--fill", `${state.volume}%`);
     if (state.playerKind === "youtube" && state.playerReady && state.ytPlayer) {
       state.ytPlayer.setVolume(state.volume);
     }
@@ -1484,13 +1507,32 @@
     }
   }
 
+  function closeTuningPopovers(except) {
+    [
+      [elements.speedButton, elements.speedPopover],
+      [elements.volumeButton, elements.volumePopover],
+    ].forEach(([button, popover]) => {
+      if (popover === except) return;
+      popover.classList.add("is-hidden");
+      button.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  function toggleTuningPopover(button, popover) {
+    const opening = popover.classList.contains("is-hidden");
+    closeTuningPopovers(opening ? popover : null);
+    popover.classList.toggle("is-hidden", !opening);
+    button.setAttribute("aria-expanded", String(opening));
+    if (opening) window.requestAnimationFrame(() => popover.querySelector('input[type="range"]').focus());
+  }
+
   function toggleLoop() {
     state.loopLine = !state.loopLine;
     elements.loopButton.classList.toggle("is-active", state.loopLine);
     elements.loopButton.setAttribute("aria-pressed", String(state.loopLine));
     showToast(
-      state.loopLine ? "Line loop on" : "Line loop off",
-      state.loopLine ? "The current sentence will repeat automatically." : "Playback will continue normally."
+      state.loopLine ? "已开启单句循环" : "已关闭单句循环",
+      state.loopLine ? "当前句子会自动重复播放。" : "视频将按正常顺序继续播放。"
     );
   }
 
@@ -1515,13 +1557,14 @@
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    showToast("Transcript downloaded", "Your timed practice script is ready.");
+    showToast("字幕已下载", "带时间信息的练习字幕已保存。");
   }
 
   function returnHome() {
     ++state.loadToken;
     setPlaying(false);
     cleanupPlayer();
+    closeTuningPopovers();
     state.source = null;
     state.transcript = [];
     state.transcriptId = null;
@@ -1542,6 +1585,7 @@
     closeDictionary();
     updateTranslationToggle();
     elements.videoMount.replaceChildren();
+    elements.videoAmbient.style.backgroundImage = "";
     elements.workspaceView.classList.add("is-hidden");
     elements.landingView.classList.remove("is-hidden");
     elements.aiSettingsButton.classList.add("is-hidden");
@@ -1551,7 +1595,7 @@
     elements.searchRow.classList.add("is-hidden");
     elements.searchResultCount.textContent = "0";
     elements.captionOverlay.classList.remove("is-visible");
-    elements.captionText.textContent = "Your current sentence will appear here.";
+    elements.captionText.textContent = "当前句子会显示在这里。";
     elements.captionTranslation.textContent = "译文将在开启翻译后显示";
     elements.captionTranslation.classList.remove("is-loading", "has-error");
     clearFieldError();
@@ -1631,7 +1675,7 @@
       syncTranslationSettingsForm(input.value);
       elements.aiConfigStatus.textContent = input.value === "chrome"
         ? chromeAvailabilityText()
-        : state.languageAvailable ? "API connection is ready" : "API connection required";
+        : state.languageAvailable ? "API 已连接" : "需要配置 API";
       elements.aiSettingsError.textContent = "";
     });
   });
@@ -1646,7 +1690,9 @@
   elements.rewindButton.addEventListener("click", () => seekTo(state.currentTime - 5));
   elements.forwardButton.addEventListener("click", () => seekTo(state.currentTime + 5));
   elements.progressRange.addEventListener("input", (event) => seekTo(event.target.value));
-  elements.speedSelect.addEventListener("change", (event) => setPlaybackSpeed(event.target.value));
+  elements.speedButton.addEventListener("click", () => toggleTuningPopover(elements.speedButton, elements.speedPopover));
+  elements.speedRange.addEventListener("input", (event) => setPlaybackSpeed(event.target.value));
+  elements.volumeButton.addEventListener("click", () => toggleTuningPopover(elements.volumeButton, elements.volumePopover));
   elements.volumeRange.addEventListener("input", (event) => setVolume(event.target.value));
   elements.loopButton.addEventListener("click", toggleLoop);
   elements.followToggle.addEventListener("click", toggleAutoFollow);
@@ -1735,12 +1781,21 @@
   });
   elements.transcriptList.addEventListener("pointerup", () => window.setTimeout(lookupSelectedPhrase, 0));
 
+  document.addEventListener("pointerdown", (event) => {
+    if (!event.target.closest(".tuning-menu")) closeTuningPopovers();
+  });
+
+  setPlaybackSpeed(SPEEDS.indexOf(state.speed));
   setVolume(state.volume);
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !elements.aiSettingsModal.classList.contains("is-hidden")) {
       event.preventDefault();
       closeAiSettings();
+      return;
+    }
+    if (event.key === "Escape" && (!elements.speedPopover.classList.contains("is-hidden") || !elements.volumePopover.classList.contains("is-hidden"))) {
+      closeTuningPopovers();
       return;
     }
     if (elements.workspaceView.classList.contains("is-hidden")) return;
