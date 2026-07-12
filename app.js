@@ -191,6 +191,7 @@
 
     elements.landingView.classList.add("is-hidden");
     elements.workspaceView.classList.remove("is-hidden");
+    elements.aiSettingsButton.classList.remove("is-hidden");
     elements.newVideoButton.classList.remove("is-hidden");
     elements.transcriptSkeleton.classList.remove("is-hidden");
     elements.transcriptList.replaceChildren();
@@ -1315,6 +1316,7 @@
     elements.workspaceView.classList.add("is-hidden");
     elements.workspaceView.classList.remove("is-theatre");
     elements.landingView.classList.remove("is-hidden");
+    elements.aiSettingsButton.classList.add("is-hidden");
     elements.newVideoButton.classList.add("is-hidden");
     elements.videoUrl.value = "";
     elements.transcriptSearch.value = "";

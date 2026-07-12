@@ -1,4 +1,5 @@
 import os
+import json
 import unittest
 from unittest.mock import patch
 
@@ -241,6 +242,66 @@ class LanguageServiceTests(unittest.TestCase):
                     max_output_tokens=100,
                 )
             self.assertEqual(raised.exception.status, 502)
+
+    def test_structured_call_retries_truncated_json_once(self) -> None:
+        responses = [
+            {
+                "choices": [
+                    {"finish_reason": "length", "message": {"content": '{"translations": ['}}
+                ]
+            },
+            {
+                "choices": [
+                    {"finish_reason": "stop", "message": {"content": '{"translations": []}'}}
+                ]
+            },
+        ]
+        with patch.object(server, "_post_llm_chat", side_effect=responses) as post:
+            result = server._call_llm_structured(
+                base_url="https://example.test/v1",
+                api_key="test-key",
+                model="test-model",
+                schema_name="test",
+                schema={"type": "object"},
+                instructions="Return JSON.",
+                input_data={},
+                max_output_tokens=100,
+            )
+
+        self.assertEqual(result, {"translations": []})
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(post.call_args.kwargs["max_output_tokens"], 1000)
+
+    def test_deepseek_request_disables_thinking_and_enables_json_mode(self) -> None:
+        captured = {}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def read(self, _limit):
+                return b'{"choices":[]}'
+
+        class FakeOpener:
+            def open(self, request, timeout):
+                captured["payload"] = json.loads(request.data.decode("utf-8"))
+                captured["timeout"] = timeout
+                return FakeResponse()
+
+        with patch.object(server, "build_opener", return_value=FakeOpener()):
+            server._post_llm_chat(
+                "https://api.deepseek.com",
+                "test-key",
+                "deepseek-v4-flash",
+                [{"role": "user", "content": "Translate."}],
+                max_output_tokens=500,
+            )
+
+        self.assertEqual(captured["payload"]["thinking"], {"type": "disabled"})
+        self.assertEqual(captured["payload"]["response_format"], {"type": "json_object"})
 
     def test_browser_configuration_is_used_and_key_is_never_exposed(self) -> None:
         result = server.configure_llm(

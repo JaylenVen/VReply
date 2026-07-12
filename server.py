@@ -744,6 +744,10 @@ def _llm_endpoint(base_url: str) -> str:
     return base_url if base_url.endswith("/chat/completions") else base_url + "/chat/completions"
 
 
+def _is_official_deepseek_api(base_url: str) -> bool:
+    return (urlsplit(base_url).hostname or "").lower().rstrip(".") == "api.deepseek.com"
+
+
 def _validate_llm_model(value: Any) -> str:
     if not isinstance(value, str):
         raise APIError(400, "invalid_llm_model", "Enter an AI model name.")
@@ -876,11 +880,15 @@ def _post_llm_chat(
     payload = {
         "model": model,
         "messages": messages,
-
         "temperature": 0.2,
         "max_tokens": max_output_tokens,
         "stream": False,
     }
+    if _is_official_deepseek_api(base_url):
+        # DeepSeek V4 enables thinking by default. These short structured tasks
+        # need the token budget for the final JSON rather than hidden reasoning.
+        payload["thinking"] = {"type": "disabled"}
+        payload["response_format"] = {"type": "json_object"}
 
     body = json.dumps(
         payload,
@@ -1070,71 +1078,80 @@ def _call_llm_structured(
         },
     ]
 
-    response = _post_llm_chat(
-        base_url,
-        api_key,
-        model,
-        messages,
-        max_output_tokens=max_output_tokens,
+    last_content: Any = None
+    last_finish_reason: Any = None
+    for attempt in range(2):
+        request_messages = messages
+        if attempt:
+            request_messages = [
+                {
+                    **messages[0],
+                    "content": messages[0]["content"]
+                    + "\nYour previous attempt was empty, truncated, or invalid. Return the complete JSON object.",
+                },
+                messages[1],
+            ]
+        response = _post_llm_chat(
+            base_url,
+            api_key,
+            model,
+            request_messages,
+            max_output_tokens=max_output_tokens if not attempt else min(4_000, max(1_000, max_output_tokens * 2)),
+        )
+
+        try:
+            choices = response["choices"]
+            if not isinstance(choices, list) or not choices:
+                raise KeyError("choices")
+            choice = choices[0]
+            message = choice["message"]
+            last_content = message["content"]
+            last_finish_reason = choice.get("finish_reason")
+        except (AttributeError, KeyError, IndexError, TypeError) as exc:
+            print(
+                "\n"
+                "===== UNEXPECTED AI RESPONSE =====\n"
+                f"{json.dumps(response, ensure_ascii=False, indent=2)}\n"
+                "========================================\n",
+                flush=True,
+            )
+            raise APIError(
+                502,
+                "ai_invalid_response",
+                "The AI API returned an unexpected response structure.",
+            ) from exc
+
+        if isinstance(last_content, str) and last_content.strip():
+            try:
+                result = json.loads(last_content)
+            except json.JSONDecodeError:
+                result = None
+            if isinstance(result, dict):
+                return result
+
+        if not attempt:
+            print(
+                "\n"
+                "===== RETRYING INCOMPLETE AI JSON =====\n"
+                f"Finish reason: {last_finish_reason}\n"
+                "========================================\n",
+                flush=True,
+            )
+
+    if isinstance(last_content, str) and last_content.strip():
+        print(
+            "\n"
+            "===== INVALID AI JSON AFTER RETRY =====\n"
+            f"{last_content}\n"
+            "=========================================\n",
+            flush=True,
+        )
+    detail = " The provider reported that its output token limit was reached." if last_finish_reason == "length" else ""
+    raise APIError(
+        502,
+        "ai_invalid_response",
+        "The AI API returned an incomplete or invalid JSON answer twice." + detail,
     )
-
-    try:
-        choices = response["choices"]
-
-        if not isinstance(choices, list) or not choices:
-            raise KeyError("choices")
-
-        message = choices[0]["message"]
-        content = message["content"]
-
-    except (KeyError, IndexError, TypeError) as exc:
-        print(
-            "\n"
-            "===== UNEXPECTED AI RESPONSE =====\n"
-            f"{json.dumps(response, ensure_ascii=False, indent=2)}\n"
-            "========================================\n",
-            flush=True,
-        )
-
-        raise APIError(
-            502,
-            "ai_invalid_response",
-            "The AI API returned an unexpected response structure.",
-        ) from exc
-
-    if not isinstance(content, str) or not content.strip():
-        raise APIError(
-            502,
-            "ai_invalid_response",
-            "The AI API returned an empty answer.",
-        )
-
-    try:
-        result = json.loads(content)
-
-    except json.JSONDecodeError as exc:
-        print(
-            "\n"
-            "===== INVALID AI JSON =====\n"
-            f"{content}\n"
-            "=================================\n",
-            flush=True,
-        )
-
-        raise APIError(
-            502,
-            "ai_invalid_response",
-            "The AI answer was not valid JSON.",
-        ) from exc
-
-    if not isinstance(result, dict):
-        raise APIError(
-            502,
-            "ai_invalid_response",
-            "The AI answer had the wrong shape.",
-        )
-
-    return result
 
 
 def _translation_schema() -> dict[str, Any]:
