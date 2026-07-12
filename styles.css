@@ -2947,6 +2947,190 @@ body.workspace-active .app-main {
 
 /* Responsive */
 
+/* Focused listening tools and sentence coach */
+.video-panel { position: relative; }
+
+.settings-group {
+  padding: 4px;
+  gap: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.settings-group .tuning-trigger {
+  min-width: 38px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.settings-group .volume-control .tuning-trigger { padding: 0; }
+
+.analysis-trigger {
+  display: grid;
+  width: 38px;
+  height: 34px;
+  padding: 0;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.68);
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.analysis-trigger:hover,
+.analysis-trigger[aria-expanded="true"] {
+  background: var(--acid);
+  color: #11150f;
+}
+
+.analysis-trigger svg {
+  width: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.55;
+}
+
+.analysis-trigger .analysis-spark { fill: currentColor; stroke: none; }
+
+.analysis-card {
+  position: absolute;
+  z-index: 30;
+  right: 16px;
+  bottom: 78px;
+  left: 16px;
+  max-height: min(520px, calc(100% - 98px));
+  padding: 20px;
+  overflow-y: auto;
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
+  border-radius: 20px;
+  background: rgba(17, 22, 18, 0.97);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.56);
+  animation: dictionary-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  backdrop-filter: blur(22px);
+}
+
+.analysis-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.analysis-card > header span,
+.analysis-content > section > span {
+  color: var(--acid);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.analysis-card h2 {
+  margin: 4px 0 0;
+  font-size: 24px;
+  font-weight: 590;
+  letter-spacing: -0.03em;
+}
+
+.analysis-card blockquote {
+  margin: 17px 0 0;
+  padding: 13px 15px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 3px solid var(--acid);
+  border-radius: 0 12px 12px 0;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.analysis-status { margin: 20px 0 4px; color: var(--muted); font-size: 12px; }
+.analysis-status:empty { display: none; }
+.analysis-status.is-error { color: #e7a477; }
+
+.analysis-content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 18px;
+  gap: 10px;
+}
+
+.analysis-content > section {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.analysis-content p { margin: 7px 0 0; color: var(--ink-soft); font-size: 12px; line-height: 1.55; }
+.analysis-content b { color: var(--ink); font-weight: 620; }
+.analysis-content .analysis-reading { background: rgba(var(--accent-rgb), 0.08); }
+
+/* These controls belong to the transcript tab, not to the peer tab switcher. */
+.transcript-header {
+  display: flex;
+  min-height: 62px;
+  padding: 0 20px;
+}
+
+.transcript-actions {
+  display: flex;
+  min-height: 48px;
+  padding: 5px 12px 7px 20px;
+  gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.transcript-panel.is-summary .transcript-actions { display: none; }
+
+.transcript-tool-label {
+  margin-right: auto;
+  align-self: center;
+  color: rgba(255, 255, 255, 0.32);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+/* Dictionary content: pronunciation, bilingual definitions, no provider noise. */
+.dictionary-pronunciations { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.dictionary-pronunciations button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.dictionary-pronunciations button:hover { border-color: rgba(var(--accent-rgb), 0.35); color: var(--acid); }
+.dictionary-pronunciations b { display: grid; width: 20px; height: 20px; place-items: center; border-radius: 6px; background: rgba(var(--accent-rgb), 0.12); color: var(--acid); font-size: 10px; }
+.dictionary-pronunciations span { font-family: var(--font-mono); font-size: 11px; }
+.dictionary-pronunciations svg { width: 14px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+
+.dictionary-definition { margin-top: 16px; }
+.dictionary-definition > span { color: var(--muted); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.09em; text-transform: uppercase; }
+.dictionary-english { margin: 6px 0 0; white-space: pre-line; color: var(--ink-soft); font-size: 13px; line-height: 1.65; }
+.dictionary-context:empty,
+.dictionary-english:empty,
+.dictionary-definition:has(.dictionary-english:empty) { display: none; }
+
 @media (max-width: 1180px) {
   .transcript-actions .follow-toggle b {
     display: block;
@@ -3237,8 +3421,19 @@ body.workspace-active .app-main {
 
   .settings-group {
     margin-left: auto;
-    padding-right: 0;
+    padding: 4px;
   }
+
+  .analysis-card {
+    right: 8px;
+    bottom: 118px;
+    left: 8px;
+    max-height: calc(100% - 138px);
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .analysis-content { grid-template-columns: 1fr; }
 
   .control-button {
     width: 33px;
@@ -3297,10 +3492,8 @@ body.workspace-active .app-main {
   }
 
   .transcript-header {
-    grid-template-columns: 1fr;
-    min-height: 116px;
-    padding: 0 12px 10px 16px;
-    gap: 0;
+    min-height: 60px;
+    padding: 0 16px;
   }
 
   .panel-tabs {
@@ -3309,7 +3502,7 @@ body.workspace-active .app-main {
 
   .transcript-actions {
     justify-content: flex-end;
-    padding-right: 0;
+    padding: 6px 10px 8px 16px;
   }
 
   .transcript-item {

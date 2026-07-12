@@ -282,6 +282,28 @@ class LanguageServiceTests(unittest.TestCase):
                 server.summarize_transcript(payload)
         self.assertEqual(raised.exception.code, "ai_invalid_response")
 
+    def test_sentence_analysis_uses_context_and_cache(self) -> None:
+        generated = {
+            "grammar": [{"point": "一般过去时", "explanation": "turned 表示已经发生的动作。"}],
+            "sentencePattern": {"name": "主语 + 谓语 + 宾语", "explanation": "核心成分完整。"},
+            "phrases": [{"phrase": "turn on", "meaning": "打开设备。"}],
+            "readingTips": [{"focus": "连读", "tip": "turned on 可自然连读。"}],
+        }
+        payload = {
+            "transcriptId": self.transcript["transcriptId"],
+            "segmentId": 1,
+            "targetLanguage": "zh-CN",
+        }
+        with self._env(), patch.object(server, "_call_llm_structured", return_value=generated) as ai_call:
+            first = server.analyze_sentence(payload)
+            second = server.analyze_sentence(payload)
+
+        self.assertEqual(ai_call.call_count, 1)
+        self.assertEqual(ai_call.call_args.kwargs["input_data"]["context"]["next"], "The project can take off now.")
+        self.assertFalse(first["cached"])
+        self.assertTrue(second["cached"])
+        self.assertEqual(second["analysis"]["phrases"][0]["phrase"], "turn on")
+
     def test_dictionary_checks_selection_and_caches_contextual_entry(self) -> None:
         calls = []
 
@@ -289,9 +311,11 @@ class LanguageServiceTests(unittest.TestCase):
             calls.append(kwargs)
             return {
                 "headword": "take off",
-                "pronunciation": "/teɪk ɒf/",
+                "pronunciationUS": "/teɪk ɔːf/",
+                "pronunciationUK": "/teɪk ɒf/",
                 "partOfSpeech": "短语动词",
                 "meaning": "起飞；迅速开始成功",
+                "englishMeaning": "To become successful or popular very quickly.",
                 "contextMeaning": "本句表示项目开始快速推进。",
                 "example": "The new product really took off.",
                 "exampleTranslation": "这款新产品迅速走红了。",
@@ -330,6 +354,8 @@ class LanguageServiceTests(unittest.TestCase):
         self.assertEqual(result["entry"]["source"], "local")
         self.assertEqual(result["entry"]["dictionary"], "ECDICT")
         self.assertIn("起飞", result["entry"]["meaning"])
+        self.assertIn("englishMeaning", result["entry"])
+        self.assertEqual(result["entry"]["contextMeaning"], "")
         ai_call.assert_not_called()
 
     def test_local_dictionary_resolves_inflected_word_aliases(self) -> None:

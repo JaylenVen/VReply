@@ -10,7 +10,7 @@
     <meta name="theme-color" content="#0d100e" />
     <title>VReply — 看懂，也说得出</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23151815'/%3E%3Ctext x='18' y='46' fill='%23f0ede6' font-size='42' font-family='Helvetica'%3EV%3C/text%3E%3Ccircle cx='53' cy='53' r='9' fill='%23b9df72'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="styles.css?v=20260712-preserve-translations" />
+    <link rel="stylesheet" href="styles.css?v=20260712-sentence-analysis" />
   </head>
   <body>
     <div class="page-noise" aria-hidden="true"></div>
@@ -147,15 +147,15 @@
 
             <div class="player-controls">
               <div class="transport-group" aria-label="播放控制">
-                <button class="control-button" id="rewindButton" type="button" aria-label="后退 5 秒">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8H5V4M5.2 8.2a8 8 0 1 1-1 6.8" /><text x="10.2" y="15.3">5</text></svg>
+                <button class="control-button" id="rewindButton" type="button" aria-label="上一句" title="上一句">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14M19 6l-8 6 8 6V6Z" /></svg>
                 </button>
                 <button class="play-button" id="playButton" type="button" aria-label="播放视频">
                   <svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7 8 5-8 5V7Z" /></svg>
                   <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7v10M15 7v10" /></svg>
                 </button>
-                <button class="control-button" id="forwardButton" type="button" aria-label="前进 5 秒">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 8h4V4m-.2 4.2a8 8 0 1 0 1 6.8" /><text x="7.3" y="15.3">5</text></svg>
+                <button class="control-button" id="forwardButton" type="button" aria-label="下一句" title="下一句">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5v14M5 6l8 6-8 6V6Z" /></svg>
                 </button>
               </div>
 
@@ -172,10 +172,11 @@
                 </label>
               </div>
 
-              <div class="settings-group">
+              <div class="settings-group" role="group" aria-label="听读工具">
                 <div class="tuning-menu speed-control">
                   <button class="tuning-trigger" id="speedButton" type="button" aria-expanded="false" aria-controls="speedPopover" aria-label="调节播放速度">
-                    <span>倍速</span><b id="speedButtonValue">1×</b>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15a8 8 0 1 1 16 0M12 15l4-5M7 18h10" /></svg>
+                    <b id="speedButtonValue">1×</b>
                   </button>
                   <div class="tuning-popover is-hidden" id="speedPopover" role="group" aria-label="倍速调节">
                     <label class="tuning-control">
@@ -188,7 +189,6 @@
                 <div class="tuning-menu volume-control">
                   <button class="tuning-trigger" id="volumeButton" type="button" aria-expanded="false" aria-controls="volumePopover" aria-label="调节音量">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l4 3V7l-4 3H4ZM15 9.5a4 4 0 0 1 0 5M17.5 7a7.5 7.5 0 0 1 0 10" /></svg>
-                    <span>音量</span>
                   </button>
                   <div class="tuning-popover is-hidden" id="volumePopover" role="group" aria-label="音量调节">
                     <label class="tuning-control">
@@ -197,8 +197,35 @@
                     </label>
                   </div>
                 </div>
+
+                <button class="analysis-trigger" id="analysisButton" type="button" aria-expanded="false" aria-controls="analysisCard" aria-label="AI 分析当前句子" title="AI 句子分析">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 4h6M12 2v4M6 9h12v10H6zM9 13h.01M15 13h.01M9 16h6" />
+                    <path class="analysis-spark" d="m19 3 .5 1.5L21 5l-1.5.5L19 7l-.5-1.5L17 5l1.5-.5z" />
+                  </svg>
+                </button>
               </div>
             </div>
+
+            <section class="analysis-card is-hidden" id="analysisCard" role="dialog" aria-live="polite" aria-labelledby="analysisTitle">
+              <header>
+                <div>
+                  <span>AI SENTENCE COACH</span>
+                  <h2 id="analysisTitle">句子拆解</h2>
+                </div>
+                <button class="dictionary-close" id="analysisClose" type="button" aria-label="关闭句子分析">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+                </button>
+              </header>
+              <blockquote id="analysisSentence"></blockquote>
+              <p class="analysis-status" id="analysisStatus">正在分析当前句子…</p>
+              <div class="analysis-content is-hidden" id="analysisContent">
+                <section><span>语法</span><div id="analysisGrammar"></div></section>
+                <section><span>句式</span><div id="analysisPattern"></div></section>
+                <section><span>词组 / 短语</span><div id="analysisPhrases"></div></section>
+                <section class="analysis-reading"><span>朗读技巧</span><div id="analysisReading"></div></section>
+              </div>
+            </section>
           </section>
 
           <aside class="transcript-panel" id="transcriptPanel" aria-label="逐句字幕">
@@ -218,7 +245,10 @@
                   </svg>
                 </button>
               </div>
-              <div class="transcript-actions">
+            </header>
+
+            <div class="transcript-actions" aria-label="逐句字幕工具">
+                <span class="transcript-tool-label">字幕工具</span>
                 <button class="follow-toggle is-active" id="followToggle" type="button" aria-label="自动跟随字幕" aria-pressed="true" title="自动跟随字幕">
                   <span><i></i></span>
                   <b>跟随</b>
@@ -235,8 +265,7 @@
                 <button class="icon-button" id="downloadButton" type="button" aria-label="下载字幕">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M8 11l4 4 4-4M5 20h14" /></svg>
                 </button>
-              </div>
-            </header>
+            </div>
 
             <div class="search-row is-hidden" id="searchRow">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></svg>
@@ -256,7 +285,12 @@
               </header>
               <p class="dictionary-status" id="dictionaryStatus">正在读取语境…</p>
               <div class="dictionary-content is-hidden" id="dictionaryContent">
-                <p class="dictionary-meaning" id="dictionaryMeaning"></p>
+                <div class="dictionary-pronunciations" id="dictionaryPronunciations">
+                  <button type="button" data-accent="en-US" aria-label="播放美式发音"><b>美</b><span id="dictionaryPronunciationUS"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10v4h3l4 3V7l-4 3H5M16 9.5a4 4 0 0 1 0 5" /></svg></button>
+                  <button type="button" data-accent="en-GB" aria-label="播放英式发音"><b>英</b><span id="dictionaryPronunciationUK"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10v4h3l4 3V7l-4 3H5M16 9.5a4 4 0 0 1 0 5" /></svg></button>
+                </div>
+                <section class="dictionary-definition"><span>中文释义</span><p class="dictionary-meaning" id="dictionaryMeaning"></p></section>
+                <section class="dictionary-definition"><span>English definition</span><p class="dictionary-english" id="dictionaryEnglishMeaning"></p></section>
                 <p class="dictionary-context" id="dictionaryContext"></p>
                 <div class="dictionary-example" id="dictionaryExampleBlock">
                   <span>例句</span>
@@ -333,7 +367,7 @@
           <div class="api-settings-fields" id="apiSettingsFields">
             <div class="api-settings-heading">
               <span>API 连接</span>
-              <small>用于内容简介、API 翻译与 AI 语境查词</small>
+              <small>用于内容简介、句子分析、API 翻译与 AI 语境查词</small>
             </div>
             <label>
               <span>API 地址</span>
@@ -372,6 +406,6 @@
     <script>
       window.VREPLY_TRANSCRIBE_ENDPOINT = "/api/transcribe";
     </script>
-    <script src="app.js?v=20260712-preserve-translations"></script>
+    <script src="app.js?v=20260712-sentence-analysis"></script>
   </body>
 </html>

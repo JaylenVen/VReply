@@ -68,6 +68,16 @@
     volumePopover: document.getElementById("volumePopover"),
     volumeRange: document.getElementById("volumeRange"),
     volumeValue: document.getElementById("volumeValue"),
+    analysisButton: document.getElementById("analysisButton"),
+    analysisCard: document.getElementById("analysisCard"),
+    analysisClose: document.getElementById("analysisClose"),
+    analysisSentence: document.getElementById("analysisSentence"),
+    analysisStatus: document.getElementById("analysisStatus"),
+    analysisContent: document.getElementById("analysisContent"),
+    analysisGrammar: document.getElementById("analysisGrammar"),
+    analysisPattern: document.getElementById("analysisPattern"),
+    analysisPhrases: document.getElementById("analysisPhrases"),
+    analysisReading: document.getElementById("analysisReading"),
     loopButton: document.getElementById("loopButton"),
     transcriptPanel: document.getElementById("transcriptPanel"),
     transcriptCount: document.getElementById("transcriptCount"),
@@ -99,6 +109,10 @@
     dictionaryStatus: document.getElementById("dictionaryStatus"),
     dictionaryContent: document.getElementById("dictionaryContent"),
     dictionaryMeaning: document.getElementById("dictionaryMeaning"),
+    dictionaryEnglishMeaning: document.getElementById("dictionaryEnglishMeaning"),
+    dictionaryPronunciations: document.getElementById("dictionaryPronunciations"),
+    dictionaryPronunciationUS: document.getElementById("dictionaryPronunciationUS"),
+    dictionaryPronunciationUK: document.getElementById("dictionaryPronunciationUK"),
     dictionaryContext: document.getElementById("dictionaryContext"),
     dictionaryExampleBlock: document.getElementById("dictionaryExampleBlock"),
     dictionaryExample: document.getElementById("dictionaryExample"),
@@ -151,6 +165,9 @@
     dictionaryCache: new Map(),
     dictionaryController: null,
     dictionaryRequestId: 0,
+    analysisCache: new Map(),
+    analysisController: null,
+    analysisRequestId: 0,
     phrasePointer: null,
     suppressWordClick: false,
     panelView: "transcript",
@@ -234,6 +251,7 @@
     state.summaryController = null;
     state.summaryLoading = false;
     state.summaryTranscriptId = null;
+    state.analysisCache.clear();
     state.dictionaryCache.clear();
     state.phrasePointer = null;
     state.suppressWordClick = false;
@@ -245,6 +263,7 @@
     cleanupPlayer();
     closeTuningPopovers();
     closeDictionary();
+    closeSentenceAnalysis();
     setPanelView("transcript");
     resetSummaryView();
     updateTranslationToggle();
@@ -736,6 +755,9 @@
   }
 
   function setActiveSegment(index) {
+    if (index !== state.activeIndex && !elements.analysisCard.classList.contains("is-hidden")) {
+      closeSentenceAnalysis();
+    }
     const previous = elements.transcriptList.querySelector(".transcript-item.is-active");
     if (previous) {
       previous.classList.remove("is-active");
@@ -865,6 +887,17 @@
     elements.searchResultCount.textContent = String(resultCount);
     elements.transcriptEmpty.classList.toggle("is-hidden", resultCount > 0);
     resetTranslationObserver();
+  }
+
+  function jumpSentence(direction) {
+    if (!state.transcript.length) return;
+    let currentIndex = state.activeIndex;
+    if (currentIndex < 0) {
+      currentIndex = state.transcript.findIndex((segment) => segment.start > state.currentTime) - 1;
+      if (currentIndex < 0 && state.currentTime >= state.transcript[0].start) currentIndex = 0;
+    }
+    const targetIndex = Math.max(0, Math.min(state.transcript.length - 1, currentIndex + direction));
+    seekTo(state.transcript[targetIndex].start, { play: state.playing });
   }
 
   function resetSummaryView() {
@@ -1562,10 +1595,13 @@
 
   function renderDictionaryEntry(entry) {
     elements.dictionaryTerm.textContent = entry.headword || entry.selection;
-    const source = entry.source === "local" ? `本地 · ${entry.dictionary || "ECDICT"}` : "AI 语境解释";
-    elements.dictionaryMeta.textContent = [source, entry.partOfSpeech, entry.pronunciation].filter(Boolean).join(" · ");
+    elements.dictionaryMeta.textContent = entry.partOfSpeech || "";
+    const fallbackPronunciation = entry.pronunciation || "";
+    elements.dictionaryPronunciationUS.textContent = entry.pronunciationUS || fallbackPronunciation;
+    elements.dictionaryPronunciationUK.textContent = entry.pronunciationUK || fallbackPronunciation;
     elements.dictionaryMeaning.textContent = entry.meaning;
-    elements.dictionaryContext.textContent = entry.contextMeaning;
+    elements.dictionaryEnglishMeaning.textContent = entry.englishMeaning || "";
+    elements.dictionaryContext.textContent = entry.source === "local" ? "" : entry.contextMeaning;
     elements.dictionaryExample.textContent = entry.example;
     elements.dictionaryExampleTranslation.textContent = entry.exampleTranslation;
     elements.dictionaryExampleBlock.classList.toggle(
@@ -1726,6 +1762,117 @@
     }
   }
 
+  function speakDictionaryTerm(accent) {
+    if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
+      showToast("当前浏览器无法播放发音", "你仍可参考卡片中的音标。");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(elements.dictionaryTerm.textContent.trim());
+    utterance.lang = accent;
+    utterance.rate = 0.86;
+    const voice = window.speechSynthesis.getVoices().find((candidate) => candidate.lang === accent);
+    if (voice) utterance.voice = voice;
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function closeSentenceAnalysis() {
+    state.analysisRequestId += 1;
+    elements.analysisCard.classList.add("is-hidden");
+    elements.analysisButton.setAttribute("aria-expanded", "false");
+    if (state.analysisController) state.analysisController.abort();
+    state.analysisController = null;
+  }
+
+  function analysisParagraph(label, text) {
+    const paragraph = document.createElement("p");
+    if (label) {
+      const strong = document.createElement("b");
+      strong.textContent = label;
+      paragraph.append(strong, document.createTextNode(` — ${text}`));
+    } else {
+      paragraph.textContent = text;
+    }
+    return paragraph;
+  }
+
+  function renderSentenceAnalysis(analysis) {
+    elements.analysisGrammar.replaceChildren(...(analysis.grammar || []).map((item) => (
+      analysisParagraph(item.point, item.explanation)
+    )));
+    elements.analysisPattern.replaceChildren(analysisParagraph(
+      analysis.sentencePattern && analysis.sentencePattern.name,
+      analysis.sentencePattern && analysis.sentencePattern.explanation
+    ));
+    elements.analysisPhrases.replaceChildren(...(analysis.phrases || []).map((item) => (
+      analysisParagraph(item.phrase, item.meaning)
+    )));
+    elements.analysisReading.replaceChildren(...(analysis.readingTips || []).map((item) => (
+      analysisParagraph(item.focus, item.tip)
+    )));
+    elements.analysisStatus.textContent = "";
+    elements.analysisStatus.classList.remove("is-error");
+    elements.analysisContent.classList.remove("is-hidden");
+    elements.analysisCard.setAttribute("aria-busy", "false");
+  }
+
+  async function analyzeCurrentSentence() {
+    const index = state.activeIndex >= 0 ? state.activeIndex : 0;
+    const segment = state.transcript[index];
+    if (!segment || !state.transcriptId) return;
+    if (!state.languageAvailable) {
+      showToast("需要配置模型 API", "AI 句子分析会使用翻译设置中的模型。");
+      openAiSettings();
+      return;
+    }
+
+    if (!elements.analysisCard.classList.contains("is-hidden")) {
+      closeSentenceAnalysis();
+      return;
+    }
+
+    const requestId = ++state.analysisRequestId;
+    elements.analysisSentence.textContent = segment.text;
+    elements.analysisStatus.textContent = "正在拆解语法、句式与朗读节奏…";
+    elements.analysisStatus.classList.remove("is-error");
+    elements.analysisContent.classList.add("is-hidden");
+    elements.analysisCard.classList.remove("is-hidden");
+    elements.analysisCard.setAttribute("aria-busy", "true");
+    elements.analysisButton.setAttribute("aria-expanded", "true");
+
+    const cacheKey = `${state.transcriptId}:${segment.id}`;
+    const cached = state.analysisCache.get(cacheKey);
+    if (cached) {
+      renderSentenceAnalysis(cached);
+      return;
+    }
+
+    const controller = new AbortController();
+    state.analysisController = controller;
+    const token = state.loadToken;
+    try {
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcriptId: state.transcriptId, segmentId: segment.id, targetLanguage: "zh-CN" }),
+        signal: controller.signal,
+      });
+      const payload = await readApiPayload(response, "句子分析暂时不可用，请稍后再试。");
+      if (token !== state.loadToken || requestId !== state.analysisRequestId || controller.signal.aborted) return;
+      const analysis = payload.analysis || {};
+      state.analysisCache.set(cacheKey, analysis);
+      renderSentenceAnalysis(analysis);
+    } catch (error) {
+      if (error.name !== "AbortError" && token === state.loadToken && requestId === state.analysisRequestId) {
+        elements.analysisStatus.textContent = error.message;
+        elements.analysisStatus.classList.add("is-error");
+        elements.analysisCard.setAttribute("aria-busy", "false");
+      }
+    } finally {
+      if (state.analysisController === controller) state.analysisController = null;
+    }
+  }
+
   function closeTuningPopovers(except) {
     [
       [elements.speedButton, elements.speedPopover],
@@ -1808,6 +1955,7 @@
     state.translationTimer = null;
     if (state.translationObserver) state.translationObserver.disconnect();
     closeDictionary();
+    closeSentenceAnalysis();
     setPanelView("transcript");
     resetSummaryView();
     updateTranslationToggle();
@@ -1920,13 +2068,15 @@
     if (event.target.closest(".extract-overlay") || !state.interactiveReady) return;
     togglePlay();
   });
-  elements.rewindButton.addEventListener("click", () => seekTo(state.currentTime - 5));
-  elements.forwardButton.addEventListener("click", () => seekTo(state.currentTime + 5));
+  elements.rewindButton.addEventListener("click", () => jumpSentence(-1));
+  elements.forwardButton.addEventListener("click", () => jumpSentence(1));
   elements.progressRange.addEventListener("input", (event) => seekTo(event.target.value));
   elements.speedButton.addEventListener("click", () => toggleTuningPopover(elements.speedButton, elements.speedPopover));
   elements.speedRange.addEventListener("input", (event) => setPlaybackSpeed(event.target.value));
   elements.volumeButton.addEventListener("click", () => toggleTuningPopover(elements.volumeButton, elements.volumePopover));
   elements.volumeRange.addEventListener("input", (event) => setVolume(event.target.value));
+  elements.analysisButton.addEventListener("click", analyzeCurrentSentence);
+  elements.analysisClose.addEventListener("click", closeSentenceAnalysis);
   elements.loopButton.addEventListener("click", toggleLoop);
   elements.followToggle.addEventListener("click", toggleAutoFollow);
   elements.translationToggle.addEventListener("click", toggleTranslations);
@@ -1938,6 +2088,10 @@
     else openAiSettings();
   });
   elements.dictionaryClose.addEventListener("click", closeDictionary);
+  elements.dictionaryPronunciations.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-accent]");
+    if (button) speakDictionaryTerm(button.dataset.accent);
+  });
   elements.searchButton.addEventListener("click", toggleSearch);
   elements.transcriptSearch.addEventListener("input", (event) => renderTranscript(event.target.value));
   elements.downloadButton.addEventListener("click", downloadTranscript);
@@ -2054,6 +2208,11 @@
       closeDictionary();
       return;
     }
+    if (event.key === "Escape" && !elements.analysisCard.classList.contains("is-hidden")) {
+      event.preventDefault();
+      closeSentenceAnalysis();
+      return;
+    }
     const target = event.target;
     if (
       target instanceof HTMLInputElement
@@ -2069,11 +2228,11 @@
     }
     if (event.code === "ArrowLeft") {
       event.preventDefault();
-      seekTo(state.currentTime - 5);
+      jumpSentence(-1);
     }
     if (event.code === "ArrowRight") {
       event.preventDefault();
-      seekTo(state.currentTime + 5);
+      jumpSentence(1);
     }
   });
 
