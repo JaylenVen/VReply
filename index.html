@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Sans:wdth,wght@75..100,400..700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260712-translation-engines" />
+    <link rel="stylesheet" href="styles.css?v=20260712-player-controls" />
   </head>
   <body>
     <div class="page-noise" aria-hidden="true"></div>
@@ -145,8 +145,12 @@
               </div>
             </div>
 
-            <div class="caption-overlay" id="captionOverlay" aria-live="polite" aria-label="Current practice subtitle">
-              <p id="captionText">Your current sentence will appear here.</p>
+            <div class="caption-overlay" id="captionOverlay" aria-live="polite" aria-label="Current bilingual practice subtitle">
+              <span class="caption-kicker">Now speaking</span>
+              <div class="caption-copy">
+                <p id="captionText">Your current sentence will appear here.</p>
+                <p class="caption-translation" id="captionTranslation">译文将在开启翻译后显示</p>
+              </div>
             </div>
 
             <div class="player-controls">
@@ -161,6 +165,11 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 8h4V4m-.2 4.2a8 8 0 1 0 1 6.8" /><text x="7.3" y="15.3">5</text></svg>
               </button>
 
+              <button class="loop-button" id="loopButton" type="button" aria-pressed="false" title="Repeat the current subtitle">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a4 4 0 0 1 4 4M17 4l3 3-3 3M17 17H7a4 4 0 0 1-4-4M7 20l-3-3 3-3" /></svg>
+                <span>Loop line</span>
+              </button>
+
               <span class="time-readout"><b id="currentTime">00:00</b><i>/</i><span id="durationTime">02:30</span></span>
 
               <label class="progress-control" aria-label="Video progress">
@@ -168,21 +177,26 @@
                 <span class="progress-track"><i id="progressFill"></i></span>
               </label>
 
-              <button class="speed-button" id="speedButton" type="button" aria-label="Playback speed">1×</button>
-              <button class="control-button" id="muteButton" type="button" aria-label="Mute video">
-                <svg class="volume-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10v4h4l4 3V7l-4 3H5ZM16 9.5a4 4 0 0 1 0 5M18.5 7a7.5 7.5 0 0 1 0 10" /></svg>
-                <svg class="muted-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10v4h4l4 3V7l-4 3H5ZM17 10l4 4m0-4-4 4" /></svg>
-              </button>
-              <button class="control-button" id="theaterButton" type="button" aria-label="Hide transcript">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4zM8 18V6M16 18V6" /></svg>
-              </button>
-            </div>
+              <label class="speed-control" title="Playback speed">
+                <span class="sr-only">Playback speed</span>
+                <select id="speedSelect" aria-label="Playback speed">
+                  <option value="0.5">0.5×</option>
+                  <option value="0.75">0.75×</option>
+                  <option value="1" selected>1×</option>
+                  <option value="1.25">1.25×</option>
+                  <option value="1.5">1.5×</option>
+                  <option value="1.75">1.75×</option>
+                  <option value="2">2.0×</option>
+                  <option value="3">3.0×</option>
+                </select>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4" /></svg>
+              </label>
 
-            <div class="practice-tools">
-              <button class="loop-button" id="loopButton" type="button" aria-pressed="false">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a4 4 0 0 1 4 4M17 4l3 3-3 3M17 17H7a4 4 0 0 1-4-4M7 20l-3-3 3-3" /></svg>
-                Loop this line
-              </button>
+              <label class="volume-control" title="Volume">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l4 3V7l-4 3H4ZM15 9.5a4 4 0 0 1 0 5M17.5 7a7.5 7.5 0 0 1 0 10" /></svg>
+                <input id="volumeRange" type="range" min="0" max="100" step="1" value="100" aria-label="Volume" />
+                <output id="volumeValue" for="volumeRange">100%</output>
+              </label>
             </div>
           </section>
 
@@ -335,6 +349,6 @@
     <script>
       window.VREPLY_TRANSCRIBE_ENDPOINT = "/api/transcribe";
     </script>
-    <script src="app.js?v=20260712-translation-engines"></script>
+    <script src="app.js?v=20260712-player-controls"></script>
   </body>
 </html>

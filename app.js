@@ -2,7 +2,6 @@
   "use strict";
 
   const DEFAULT_DURATION = 150;
-  const SPEEDS = [0.75, 1, 1.25, 1.5];
   const TRANSLATION_ENGINE_KEY = "vreply:translation-engine";
 
   function initialTranslationEngine() {
@@ -45,6 +44,7 @@
     videoPlaceholder: document.getElementById("videoPlaceholder"),
     captionOverlay: document.getElementById("captionOverlay"),
     captionText: document.getElementById("captionText"),
+    captionTranslation: document.getElementById("captionTranslation"),
     extractOverlay: document.getElementById("extractOverlay"),
     extractTitle: document.getElementById("extractTitle"),
     extractDetail: document.getElementById("extractDetail"),
@@ -56,10 +56,10 @@
     durationTime: document.getElementById("durationTime"),
     progressRange: document.getElementById("progressRange"),
     progressFill: document.getElementById("progressFill"),
-    speedButton: document.getElementById("speedButton"),
-    muteButton: document.getElementById("muteButton"),
+    speedSelect: document.getElementById("speedSelect"),
+    volumeRange: document.getElementById("volumeRange"),
+    volumeValue: document.getElementById("volumeValue"),
     loopButton: document.getElementById("loopButton"),
-    theaterButton: document.getElementById("theaterButton"),
     transcriptCount: document.getElementById("transcriptCount"),
     transcriptScroll: document.getElementById("transcriptScroll"),
     transcriptSkeleton: document.getElementById("transcriptSkeleton"),
@@ -96,7 +96,7 @@
     currentTime: 0,
     duration: DEFAULT_DURATION,
     playing: false,
-    muted: false,
+    volume: 100,
     speed: 1,
     loopLine: false,
     autoFollow: true,
@@ -222,6 +222,9 @@
     elements.searchRow.classList.add("is-hidden");
     elements.searchResultCount.textContent = "0";
     elements.captionOverlay.classList.remove("is-visible");
+    elements.captionText.textContent = "Your current sentence will appear here.";
+    elements.captionTranslation.textContent = "译文将在开启翻译后显示";
+    elements.captionTranslation.classList.remove("is-loading", "has-error");
     elements.extractOverlay.classList.remove("is-complete");
     elements.extractOverlay.classList.remove("has-error");
     elements.extractProgress.style.width = "10%";
@@ -396,8 +399,8 @@
       elements.playButton,
       elements.forwardButton,
       elements.progressRange,
-      elements.speedButton,
-      elements.muteButton,
+      elements.speedSelect,
+      elements.volumeRange,
       elements.loopButton,
       elements.followToggle,
       elements.searchButton,
@@ -437,6 +440,7 @@
       video.src = source.url;
       video.preload = "metadata";
       video.playsInline = true;
+      video.volume = state.volume / 100;
       video.setAttribute("aria-label", "Imported video");
       video.addEventListener("loadedmetadata", () => {
         if (token !== state.loadToken) return;
@@ -483,8 +487,8 @@
               state.simulatedPlayback = false;
               state.duration = source.clipDuration || Number(event.target.getDuration()) || state.duration;
               event.target.setPlaybackRate(state.speed);
+              event.target.setVolume(state.volume);
               disableYouTubeCaptions(event.target);
-              if (state.muted) event.target.mute();
               elements.videoPlaceholder.classList.add("is-hidden");
               updatePlaybackUI(state.currentTime, true);
             },
@@ -696,6 +700,8 @@
       state.activeIndex = -1;
       state.lastCaptionWord = -1;
       elements.captionOverlay.classList.remove("is-visible");
+      elements.captionTranslation.textContent = "译文将在开启翻译后显示";
+      elements.captionTranslation.classList.remove("is-loading", "has-error");
       return;
     }
 
@@ -713,6 +719,7 @@
     const segment = state.transcript[index];
     elements.captionOverlay.classList.add("is-visible");
     renderCaptionWords(segment);
+    updateCaptionTranslation(index);
   }
 
   function renderCaptionWords(segment) {
@@ -930,6 +937,19 @@
     elements.transcriptList
       .querySelectorAll(`.line-translation[data-index="${index}"]`)
       .forEach((node) => updateTranslationNode(node, index));
+    if (index === state.activeIndex) updateCaptionTranslation(index);
+  }
+
+  function updateCaptionTranslation(index) {
+    const translation = state.translations.get(index);
+    const error = state.translationErrors.get(index);
+    const loading = state.translationQueue.has(index) || state.translationInFlight.has(index);
+    elements.captionTranslation.classList.toggle("is-loading", loading);
+    elements.captionTranslation.classList.toggle("has-error", Boolean(error));
+    if (translation) elements.captionTranslation.textContent = translation.text;
+    else if (error) elements.captionTranslation.textContent = "译文暂时不可用";
+    else if (loading) elements.captionTranslation.textContent = "正在生成译文…";
+    else elements.captionTranslation.textContent = "译文将在开启翻译后显示";
   }
 
   function resetTranslationObserver() {
@@ -1441,10 +1461,8 @@
     }
   }
 
-  function cycleSpeed() {
-    const currentIndex = SPEEDS.indexOf(state.speed);
-    state.speed = SPEEDS[(currentIndex + 1) % SPEEDS.length];
-    elements.speedButton.textContent = `${state.speed}×`;
+  function setPlaybackSpeed(value) {
+    state.speed = Number(value) || 1;
 
     if (state.playerKind === "youtube" && state.playerReady && state.ytPlayer) {
       state.ytPlayer.setPlaybackRate(state.speed);
@@ -1454,17 +1472,15 @@
     }
   }
 
-  function toggleMute() {
-    state.muted = !state.muted;
-    elements.muteButton.classList.toggle("is-muted", state.muted);
-    elements.muteButton.setAttribute("aria-label", state.muted ? "Unmute video" : "Mute video");
-
+  function setVolume(value) {
+    state.volume = Math.max(0, Math.min(100, Number(value) || 0));
+    elements.volumeValue.value = `${state.volume}%`;
+    elements.volumeRange.style.setProperty("--volume", `${state.volume}%`);
     if (state.playerKind === "youtube" && state.playerReady && state.ytPlayer) {
-      if (state.muted) state.ytPlayer.mute();
-      else state.ytPlayer.unMute();
+      state.ytPlayer.setVolume(state.volume);
     }
     if (state.playerKind === "direct" && state.directPlayer) {
-      state.directPlayer.muted = state.muted;
+      state.directPlayer.volume = state.volume / 100;
     }
   }
 
@@ -1483,12 +1499,6 @@
     elements.followToggle.classList.toggle("is-active", state.autoFollow);
     elements.followToggle.setAttribute("aria-pressed", String(state.autoFollow));
     if (state.autoFollow) setActiveSegment(state.activeIndex < 0 ? 0 : state.activeIndex);
-  }
-
-  function toggleTheater() {
-    const enabled = elements.workspaceView.classList.toggle("is-theatre");
-    elements.theaterButton.setAttribute("aria-pressed", String(enabled));
-    elements.theaterButton.setAttribute("aria-label", enabled ? "Show transcript" : "Hide transcript");
   }
 
   function downloadTranscript() {
@@ -1533,7 +1543,6 @@
     updateTranslationToggle();
     elements.videoMount.replaceChildren();
     elements.workspaceView.classList.add("is-hidden");
-    elements.workspaceView.classList.remove("is-theatre");
     elements.landingView.classList.remove("is-hidden");
     elements.aiSettingsButton.classList.add("is-hidden");
     elements.newVideoButton.classList.add("is-hidden");
@@ -1541,6 +1550,10 @@
     elements.transcriptSearch.value = "";
     elements.searchRow.classList.add("is-hidden");
     elements.searchResultCount.textContent = "0";
+    elements.captionOverlay.classList.remove("is-visible");
+    elements.captionText.textContent = "Your current sentence will appear here.";
+    elements.captionTranslation.textContent = "译文将在开启翻译后显示";
+    elements.captionTranslation.classList.remove("is-loading", "has-error");
     clearFieldError();
     requestAnimationFrame(() => elements.videoUrl.focus());
   }
@@ -1633,10 +1646,9 @@
   elements.rewindButton.addEventListener("click", () => seekTo(state.currentTime - 5));
   elements.forwardButton.addEventListener("click", () => seekTo(state.currentTime + 5));
   elements.progressRange.addEventListener("input", (event) => seekTo(event.target.value));
-  elements.speedButton.addEventListener("click", cycleSpeed);
-  elements.muteButton.addEventListener("click", toggleMute);
+  elements.speedSelect.addEventListener("change", (event) => setPlaybackSpeed(event.target.value));
+  elements.volumeRange.addEventListener("input", (event) => setVolume(event.target.value));
   elements.loopButton.addEventListener("click", toggleLoop);
-  elements.theaterButton.addEventListener("click", toggleTheater);
   elements.followToggle.addEventListener("click", toggleAutoFollow);
   elements.translationToggle.addEventListener("click", toggleTranslations);
   elements.dictionaryClose.addEventListener("click", closeDictionary);
@@ -1723,6 +1735,8 @@
   });
   elements.transcriptList.addEventListener("pointerup", () => window.setTimeout(lookupSelectedPhrase, 0));
 
+  setVolume(state.volume);
+
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !elements.aiSettingsModal.classList.contains("is-hidden")) {
       event.preventDefault();
@@ -1738,6 +1752,7 @@
     const target = event.target;
     if (
       target instanceof HTMLInputElement
+      || target instanceof HTMLSelectElement
       || target instanceof HTMLTextAreaElement
       || target instanceof HTMLButtonElement
       || target.isContentEditable
