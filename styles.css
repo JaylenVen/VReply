@@ -2069,7 +2069,12 @@ svg {
 }
 
 .api-settings-fields.is-secondary {
-  display: none;
+  display: grid;
+  opacity: 0.72;
+}
+
+.api-settings-fields.is-secondary:focus-within {
+  opacity: 1;
 }
 
 .api-settings-heading {

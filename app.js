@@ -1224,7 +1224,7 @@
     }
   }
 
-  function clearTranslationResults() {
+  function cancelPendingTranslationWork() {
     state.translationControllers.forEach((controller) => controller.abort());
     state.translationControllers.clear();
     state.translationActiveBatches = 0;
@@ -1233,19 +1233,24 @@
     state.translationQueue.clear();
     state.translationInFlight.clear();
     state.translationErrors.clear();
-    state.translations.clear();
-    state.revealedTranslations.clear();
-    state.showTranslations = false;
     elements.transcriptList.querySelectorAll(".line-translation").forEach((node) => {
       updateTranslationNode(node, Number(node.dataset.index));
     });
+    if (state.activeIndex >= 0) updateCaptionTranslation(state.activeIndex);
+    updateTranslationProgress();
   }
 
   function setTranslationEngine(engine) {
     if (engine !== "chrome" && engine !== "api") return;
     if (state.translationEngine !== engine) {
       state.translationEngine = engine;
-      clearTranslationResults();
+      cancelPendingTranslationWork();
+      if (state.showTranslations && state.translations.size < state.transcript.length) {
+        prepareTranslationEngine().then((ready) => {
+          if (!ready || state.translationEngine !== engine || !state.showTranslations) return;
+          state.transcript.forEach((_segment, index) => queueTranslation(index));
+        });
+      }
     }
     try {
       localStorage.setItem(TRANSLATION_ENGINE_KEY, engine);
@@ -1446,46 +1451,66 @@
   async function saveAiSettings(event) {
     event.preventDefault();
     const engine = elements.translationEngineChrome.checked ? "chrome" : "api";
+    const config = state.llmConfig || {};
+    const apiKey = elements.aiApiKey.value.trim();
+    const sameExistingConfig = state.languageAvailable
+      && elements.aiBaseUrl.value.trim() === String(config.baseUrl || "")
+      && elements.aiModel.value.trim() === String(config.model || "");
+    const shouldSaveApi = engine === "api" || Boolean(apiKey);
+    let apiConfigUpdated = false;
     elements.aiSettingsError.textContent = "";
     elements.aiSettingsSave.disabled = true;
     elements.aiSettingsSave.textContent = "正在保存…";
     try {
-      if (engine === "chrome") {
-        if (state.chromeTranslationAvailability === "unavailable") {
-          throw new Error("当前浏览器不支持 Chrome 本地翻译，请改用自定义模型 API。");
-        }
-        setTranslationEngine("chrome");
-      } else {
-        const config = state.llmConfig || {};
-        const sameExistingConfig = state.languageAvailable
-          && elements.aiBaseUrl.value.trim() === String(config.baseUrl || "")
-          && elements.aiModel.value.trim() === String(config.model || "");
-        if (!elements.aiApiKey.value.trim() && !sameExistingConfig) {
-          throw new Error("使用 API 翻译时，请填写 API 地址、模型名称和密钥。");
-        }
+      if (shouldSaveApi) {
         if (!elements.aiBaseUrl.value.trim() || !elements.aiModel.value.trim()) {
           throw new Error("请填写 API 地址和模型名称。");
         }
-        if (!sameExistingConfig || elements.aiApiKey.value.trim()) {
+        if (!apiKey && !sameExistingConfig) {
+          throw new Error("配置模型 API 时，请填写 API 密钥。");
+        }
+        if (!sameExistingConfig || apiKey) {
           const response = await fetch("/api/llm-config", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               baseUrl: elements.aiBaseUrl.value,
               model: elements.aiModel.value,
-              apiKey: elements.aiApiKey.value,
+              apiKey,
             }),
           });
           const payload = await readApiPayload(response, "暂时无法保存模型配置。");
           applyLanguageCapabilities(payload);
+          apiConfigUpdated = true;
         }
+      }
+
+      if (engine === "chrome") {
+        if (state.chromeTranslationAvailability === "unavailable") {
+          throw new Error("当前浏览器不支持 Chrome 本地翻译，请改用自定义模型 API。");
+        }
+        setTranslationEngine("chrome");
+      } else {
         setTranslationEngine("api");
+      }
+
+      if (apiConfigUpdated) {
+        if (state.summaryController) state.summaryController.abort();
+        state.summaryController = null;
+        state.summaryLoading = false;
+        state.summaryTranscriptId = null;
+        resetSummaryView();
       }
       closeAiSettings();
       showToast(
         "翻译设置已保存",
-        engine === "chrome" ? "字幕将在当前设备上完成翻译。" : `将通过 ${state.llmConfig.model} 翻译字幕。`
+        engine === "chrome"
+          ? state.languageAvailable
+            ? `字幕继续使用 Chrome；内容简介将使用 ${state.llmConfig.model}。`
+            : "字幕将在当前设备上完成翻译。"
+          : `未完成的字幕将通过 ${state.llmConfig.model} 继续翻译。`
       );
+      if (apiConfigUpdated && state.panelView === "summary") loadAiSummary();
     } catch (error) {
       elements.aiSettingsError.textContent = error.message;
     } finally {
