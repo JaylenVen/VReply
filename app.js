@@ -668,6 +668,7 @@
     state.playing = Boolean(playing);
     elements.playButton.classList.toggle("is-playing", state.playing);
     elements.playButton.setAttribute("aria-label", state.playing ? "暂停视频" : "播放视频");
+    elements.playButton.dataset.controlTooltip = state.playing ? "暂停" : "播放";
   }
 
   function seekTo(value, options) {
@@ -1896,6 +1897,8 @@
     state.loopLine = !state.loopLine;
     elements.loopButton.classList.toggle("is-active", state.loopLine);
     elements.loopButton.setAttribute("aria-pressed", String(state.loopLine));
+    elements.loopButton.setAttribute("aria-label", state.loopLine ? "关闭单句循环" : "循环当前句");
+    elements.loopButton.dataset.controlTooltip = state.loopLine ? "关闭单句循环" : "循环当前句";
     showToast(
       state.loopLine ? "已开启单句循环" : "已关闭单句循环",
       state.loopLine ? "当前句子会自动重复播放。" : "视频将按正常顺序继续播放。"

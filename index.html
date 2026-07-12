@@ -10,7 +10,7 @@
     <meta name="theme-color" content="#0d100e" />
     <title>VReply — 看懂，也说得出</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23151815'/%3E%3Ctext x='18' y='46' fill='%23f0ede6' font-size='42' font-family='Helvetica'%3EV%3C/text%3E%3Ccircle cx='53' cy='53' r='9' fill='%23b9df72'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="styles.css?v=20260712-sentence-analysis" />
+    <link rel="stylesheet" href="styles.css?v=20260712-control-polish" />
   </head>
   <body>
     <div class="page-noise" aria-hidden="true"></div>
@@ -147,19 +147,19 @@
 
             <div class="player-controls">
               <div class="transport-group" aria-label="播放控制">
-                <button class="control-button" id="rewindButton" type="button" aria-label="上一句" title="上一句">
+                <button class="control-button" id="rewindButton" type="button" aria-label="上一句" data-control-tooltip="上一句">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14M19 6l-8 6 8 6V6Z" /></svg>
                 </button>
-                <button class="play-button" id="playButton" type="button" aria-label="播放视频">
+                <button class="play-button" id="playButton" type="button" aria-label="播放视频" data-control-tooltip="播放">
                   <svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7 8 5-8 5V7Z" /></svg>
                   <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7v10M15 7v10" /></svg>
                 </button>
-                <button class="control-button" id="forwardButton" type="button" aria-label="下一句" title="下一句">
+                <button class="control-button" id="forwardButton" type="button" aria-label="下一句" data-control-tooltip="下一句">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5v14M5 6l8 6-8 6V6Z" /></svg>
                 </button>
               </div>
 
-              <button class="loop-button" id="loopButton" type="button" aria-pressed="false" title="循环当前句">
+              <button class="loop-button" id="loopButton" type="button" aria-label="循环当前句" aria-pressed="false" data-control-tooltip="循环当前句">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a4 4 0 0 1 4 4M17 4l3 3-3 3M17 17H7a4 4 0 0 1-4-4M7 20l-3-3 3-3" /></svg>
                 <span>单句循环</span>
               </button>
@@ -174,7 +174,7 @@
 
               <div class="settings-group" role="group" aria-label="听读工具">
                 <div class="tuning-menu speed-control">
-                  <button class="tuning-trigger" id="speedButton" type="button" aria-expanded="false" aria-controls="speedPopover" aria-label="调节播放速度">
+                  <button class="tuning-trigger" id="speedButton" type="button" aria-expanded="false" aria-controls="speedPopover" aria-label="调节播放速度" data-control-tooltip="播放速度">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15a8 8 0 1 1 16 0M12 15l4-5M7 18h10" /></svg>
                     <b id="speedButtonValue">1×</b>
                   </button>
@@ -187,7 +187,7 @@
                 </div>
 
                 <div class="tuning-menu volume-control">
-                  <button class="tuning-trigger" id="volumeButton" type="button" aria-expanded="false" aria-controls="volumePopover" aria-label="调节音量">
+                  <button class="tuning-trigger" id="volumeButton" type="button" aria-expanded="false" aria-controls="volumePopover" aria-label="调节音量" data-control-tooltip="音量">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l4 3V7l-4 3H4ZM15 9.5a4 4 0 0 1 0 5M17.5 7a7.5 7.5 0 0 1 0 10" /></svg>
                   </button>
                   <div class="tuning-popover is-hidden" id="volumePopover" role="group" aria-label="音量调节">
@@ -198,7 +198,7 @@
                   </div>
                 </div>
 
-                <button class="analysis-trigger" id="analysisButton" type="button" aria-expanded="false" aria-controls="analysisCard" aria-label="AI 分析当前句子" title="AI 句子分析">
+                <button class="analysis-trigger" id="analysisButton" type="button" aria-expanded="false" aria-controls="analysisCard" aria-label="AI 分析当前句子" data-control-tooltip="AI 句子分析">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M9 4h6M12 2v4M6 9h12v10H6zM9 13h.01M15 13h.01M9 16h6" />
                     <path class="analysis-spark" d="m19 3 .5 1.5L21 5l-1.5.5L19 7l-.5-1.5L17 5l1.5-.5z" />
@@ -316,14 +316,12 @@
 
             <section class="summary-view is-hidden" id="summaryView" role="tabpanel" aria-labelledby="summaryTab" tabindex="0">
               <div class="summary-intro">
-                <span class="summary-kicker">AI 总结 · 使用翻译设置</span>
                 <h2 id="summaryTitle">视频内容简介</h2>
                 <p id="summaryOverview">打开此页面后，将使用已配置的模型 API 总结视频内容。</p>
                 <button class="summary-retry is-hidden" id="summaryRetryButton" type="button">重新生成</button>
               </div>
               <div class="summary-topics" id="summaryTopics" aria-label="主要话题"></div>
               <div class="summary-points" id="summaryPoints"></div>
-              <p class="summary-disclaimer">内容由翻译设置中的模型根据视频字幕生成。字幕会发送至你配置的 API 服务。</p>
             </section>
 
           </aside>
@@ -406,6 +404,6 @@
     <script>
       window.VREPLY_TRANSCRIBE_ENDPOINT = "/api/transcribe";
     </script>
-    <script src="app.js?v=20260712-sentence-analysis"></script>
+    <script src="app.js?v=20260712-control-polish"></script>
   </body>
 </html>
