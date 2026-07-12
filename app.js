@@ -3,6 +3,17 @@
 
   const DEFAULT_DURATION = 150;
   const SPEEDS = [0.75, 1, 1.25, 1.5];
+  const TRANSLATION_ENGINE_KEY = "vreply:translation-engine";
+
+  function initialTranslationEngine() {
+    try {
+      const saved = localStorage.getItem(TRANSLATION_ENGINE_KEY);
+      if (saved === "chrome" || saved === "api") return saved;
+    } catch (_error) {
+      // Storage can be unavailable in privacy-focused browsing modes.
+    }
+    return "Translator" in self ? "chrome" : "api";
+  }
 
   const elements = {
     landingView: document.getElementById("landingView"),
@@ -20,6 +31,11 @@
     aiSettingsError: document.getElementById("aiSettingsError"),
     aiSettingsSave: document.getElementById("aiSettingsSave"),
     aiConfigStatus: document.getElementById("aiConfigStatus"),
+    translationEngineChrome: document.getElementById("translationEngineChrome"),
+    translationEngineApi: document.getElementById("translationEngineApi"),
+    chromeEngineOption: document.getElementById("chromeEngineOption"),
+    chromeTranslationStatus: document.getElementById("chromeTranslationStatus"),
+    apiSettingsFields: document.getElementById("apiSettingsFields"),
     urlForm: document.getElementById("urlForm"),
     videoUrl: document.getElementById("videoUrl"),
     urlField: document.getElementById("urlField"),
@@ -97,6 +113,11 @@
     interactiveReady: false,
     languageAvailable: false,
     llmConfig: null,
+    translationEngine: initialTranslationEngine(),
+    chromeTranslationAvailability: "checking",
+    chromeTranslator: null,
+    chromeTranslatorPromise: null,
+    chromeDownloadProgress: 0,
     showTranslations: false,
     revealedTranslations: new Set(),
     translations: new Map(),
@@ -815,17 +836,65 @@
     container.appendChild(word);
   }
 
+  function translationEngineAvailable() {
+    if (state.translationEngine === "api") return state.languageAvailable;
+    return !["checking", "unavailable"].includes(state.chromeTranslationAvailability);
+  }
+
+  function chromeAvailabilityText() {
+    if (!("Translator" in self) || state.chromeTranslationAvailability === "unavailable") {
+      return "Unavailable in this browser. Use desktop Chrome 138 or newer.";
+    }
+    if (state.chromeTranslationAvailability === "checking") return "Checking browser support…";
+    if (state.chromeTranslationAvailability === "downloading") {
+      return `Downloading English–Chinese language pack… ${state.chromeDownloadProgress}%`;
+    }
+    if (state.chromeTranslationAvailability === "downloadable") {
+      return "Supported. The language pack downloads on first use.";
+    }
+    if (state.chromeTranslationAvailability === "error") {
+      return "Language pack setup failed. Click translation to try again.";
+    }
+    return "Ready on this device. Subtitle text stays in the browser.";
+  }
+
+  function syncTranslationSettingsForm(engine = state.translationEngine) {
+    elements.translationEngineChrome.checked = engine === "chrome";
+    elements.translationEngineApi.checked = engine === "api";
+    elements.chromeEngineOption.classList.toggle(
+      "is-unavailable",
+      state.chromeTranslationAvailability === "unavailable"
+    );
+    elements.chromeTranslationStatus.textContent = chromeAvailabilityText();
+    elements.apiSettingsFields.classList.toggle("is-secondary", engine !== "api");
+    elements.aiBaseUrl.required = engine === "api";
+    elements.aiModel.required = engine === "api";
+  }
+
   function updateTranslationToggle() {
-    const enabled = state.interactiveReady && state.languageAvailable && Boolean(state.transcriptId);
+    const available = translationEngineAvailable();
+    const enabled = state.interactiveReady && available && Boolean(state.transcriptId);
     elements.translationToggle.disabled = !enabled;
     elements.translationToggle.classList.toggle("is-active", state.showTranslations);
     elements.translationToggle.setAttribute("aria-pressed", String(state.showTranslations));
-    elements.translationToggle.title = state.languageAvailable
-      ? "显示或隐藏简体中文翻译"
-      : "请先在 AI settings 中配置模型服务";
-    elements.languageStatus.textContent = state.languageAvailable
-      ? "AI 翻译已就绪。"
-      : "AI 翻译尚未配置，请打开 AI settings。";
+    if (state.translationEngine === "chrome") {
+      elements.translationToggle.title = available
+        ? "使用 Chrome 内置翻译显示或隐藏简体中文译文"
+        : chromeAvailabilityText();
+      elements.languageStatus.textContent = `Chrome 内置翻译：${chromeAvailabilityText()}`;
+    } else {
+      elements.translationToggle.title = state.languageAvailable
+        ? "使用自定义 API 显示或隐藏简体中文译文"
+        : "请打开 Translation 设置并配置模型 API";
+      elements.languageStatus.textContent = state.languageAvailable
+        ? "自定义 API 翻译已就绪。"
+        : "API 翻译尚未配置，请打开 Translation 设置。";
+    }
+    elements.chromeTranslationStatus.textContent = chromeAvailabilityText();
+    elements.chromeEngineOption.classList.toggle(
+      "is-unavailable",
+      state.chromeTranslationAvailability === "unavailable"
+    );
   }
 
   function updateTranslationNode(node, index) {
@@ -848,7 +917,11 @@
     text.setAttribute("aria-hidden", String(!revealed));
     if (translation) text.textContent = translation.text;
     else if (error) text.textContent = error;
-    else if (loading) text.textContent = "正在结合语境翻译…";
+    else if (loading) {
+      text.textContent = state.translationEngine === "chrome"
+        ? "正在使用 Chrome 本地翻译…"
+        : "正在结合语境翻译…";
+    }
     else text.textContent = "点击显示译文";
   }
 
@@ -876,11 +949,109 @@
       .forEach((node) => state.translationObserver.observe(node));
   }
 
-  function revealTranslation(index) {
-    if (!state.languageAvailable) {
-      showToast("AI 翻译尚未配置", "请打开 AI settings 填写 API 信息。");
+  async function detectChromeTranslationAvailability() {
+    if (!("Translator" in self)) {
+      state.chromeTranslationAvailability = "unavailable";
+      if (state.translationEngine === "chrome") setTranslationEngine("api");
+      updateTranslationToggle();
       return;
     }
+    try {
+      state.chromeTranslationAvailability = await self.Translator.availability({
+        sourceLanguage: "en",
+        targetLanguage: "zh",
+      });
+    } catch (_error) {
+      state.chromeTranslationAvailability = "error";
+    }
+    updateTranslationToggle();
+  }
+
+  async function ensureChromeTranslator() {
+    if (state.chromeTranslator) return state.chromeTranslator;
+    if (!("Translator" in self) || state.chromeTranslationAvailability === "unavailable") {
+      throw new Error("此浏览器不支持内置翻译，请使用桌面版 Chrome 138 或更高版本，或切换为 API 翻译。");
+    }
+    if (state.chromeTranslatorPromise) return state.chromeTranslatorPromise;
+
+    state.chromeTranslationAvailability = "downloading";
+    state.chromeDownloadProgress = 0;
+    updateTranslationToggle();
+    showToast("正在准备 Chrome 翻译", "首次使用需要下载中英语言包，请稍候。");
+    state.chromeTranslatorPromise = self.Translator.create({
+      sourceLanguage: "en",
+      targetLanguage: "zh",
+      monitor(monitor) {
+        monitor.addEventListener("downloadprogress", (event) => {
+          state.chromeDownloadProgress = Math.round(Number(event.loaded || 0) * 100);
+          updateTranslationToggle();
+        });
+      },
+    });
+    try {
+      state.chromeTranslator = await state.chromeTranslatorPromise;
+      state.chromeTranslationAvailability = "available";
+      state.chromeDownloadProgress = 100;
+      updateTranslationToggle();
+      return state.chromeTranslator;
+    } catch (_error) {
+      state.chromeTranslationAvailability = "error";
+      updateTranslationToggle();
+      throw new Error("Chrome 中英翻译语言包准备失败，请检查网络后重试，或切换为 API 翻译。");
+    } finally {
+      state.chromeTranslatorPromise = null;
+    }
+  }
+
+  function clearTranslationResults() {
+    state.translationControllers.forEach((controller) => controller.abort());
+    state.translationControllers.clear();
+    if (state.translationTimer) window.clearTimeout(state.translationTimer);
+    state.translationTimer = null;
+    state.translationQueue.clear();
+    state.translationInFlight.clear();
+    state.translationErrors.clear();
+    state.translations.clear();
+    state.revealedTranslations.clear();
+    state.showTranslations = false;
+    elements.transcriptList.querySelectorAll(".line-translation").forEach((node) => {
+      updateTranslationNode(node, Number(node.dataset.index));
+    });
+  }
+
+  function setTranslationEngine(engine) {
+    if (engine !== "chrome" && engine !== "api") return;
+    if (state.translationEngine !== engine) {
+      state.translationEngine = engine;
+      clearTranslationResults();
+    }
+    try {
+      localStorage.setItem(TRANSLATION_ENGINE_KEY, engine);
+    } catch (_error) {
+      // The choice still works for the current page session.
+    }
+    updateTranslationToggle();
+  }
+
+  async function prepareTranslationEngine() {
+    if (state.translationEngine === "chrome") {
+      try {
+        await ensureChromeTranslator();
+        return true;
+      } catch (error) {
+        showToast("Chrome 翻译不可用", error.message);
+        return false;
+      }
+    }
+    if (!state.languageAvailable) {
+      showToast("API 翻译尚未配置", "请打开 Translation 设置填写 API 信息。");
+      return false;
+    }
+    return true;
+  }
+
+  async function revealTranslation(index) {
+    if (!(await prepareTranslationEngine())) return;
     if (state.revealedTranslations.has(index) && !state.showTranslations) {
       state.revealedTranslations.delete(index);
     } else {
@@ -890,8 +1061,8 @@
     updateTranslationNodes(index);
   }
 
-  function toggleTranslations() {
-    if (!state.languageAvailable || !state.interactiveReady) return;
+  async function toggleTranslations() {
+    if (!state.interactiveReady || !(await prepareTranslationEngine())) return;
     state.showTranslations = !state.showTranslations;
     updateTranslationToggle();
     elements.transcriptList.querySelectorAll(".line-translation").forEach((node) => {
@@ -909,7 +1080,7 @@
 
   function queueTranslation(index) {
     if (
-      !state.languageAvailable
+      !translationEngineAvailable()
       || !state.transcriptId
       || !state.transcript[index]
       || state.translations.has(index)
@@ -933,38 +1104,54 @@
     if (!indices.length) return;
     const token = state.loadToken;
     const transcriptId = state.transcriptId;
-    const controller = new AbortController();
-    state.translationControllers.add(controller);
+    const engine = state.translationEngine;
+    const controller = engine === "api" ? new AbortController() : null;
+    if (controller) state.translationControllers.add(controller);
     try {
-      const response = await fetch("/api/translate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcriptId: state.transcriptId,
-          segmentIds: indices.map((index) => state.transcript[index].id),
-          targetLanguage: "zh-CN",
-        }),
-        signal: controller.signal,
-      });
-      const payload = await readApiPayload(response, "翻译服务暂时不可用，请稍后再试。");
-      if (token !== state.loadToken || transcriptId !== state.transcriptId || controller.signal.aborted) return;
-      const indexById = new Map(indices.map((index) => [state.transcript[index].id, index]));
-      (payload.translations || []).forEach((translation) => {
-        const index = indexById.get(translation.segmentId);
-        if (index === undefined) return;
-        state.translations.set(index, {
-          text: String(translation.text || ""),
-          note: String(translation.note || ""),
+      if (engine === "chrome") {
+        const translator = state.chromeTranslator;
+        if (!translator) throw new Error("Chrome 内置翻译尚未准备好，请重新点击译文。");
+        for (const index of indices) {
+          const translatedText = String(await translator.translate(state.transcript[index].text) || "").trim();
+          if (token !== state.loadToken || transcriptId !== state.transcriptId || engine !== state.translationEngine) return;
+          if (!translatedText) throw new Error("Chrome 没有返回该句的翻译，请稍后重试。");
+          state.translations.set(index, { text: translatedText, note: "" });
+          state.translationErrors.delete(index);
+          updateTranslationNodes(index);
+        }
+      } else {
+        const response = await fetch("/api/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transcriptId: state.transcriptId,
+            segmentIds: indices.map((index) => state.transcript[index].id),
+            targetLanguage: "zh-CN",
+          }),
+          signal: controller.signal,
         });
-        state.translationErrors.delete(index);
-      });
+        const payload = await readApiPayload(response, "翻译服务暂时不可用，请稍后再试。");
+        if (token !== state.loadToken || transcriptId !== state.transcriptId || controller.signal.aborted) return;
+        const indexById = new Map(indices.map((index) => [state.transcript[index].id, index]));
+        (payload.translations || []).forEach((translation) => {
+          const index = indexById.get(translation.segmentId);
+          if (index === undefined) return;
+          state.translations.set(index, {
+            text: String(translation.text || ""),
+            note: String(translation.note || ""),
+          });
+          state.translationErrors.delete(index);
+        });
+      }
     } catch (error) {
       if (error.name !== "AbortError" && token === state.loadToken && transcriptId === state.transcriptId) {
-        indices.forEach((index) => state.translationErrors.set(index, error.message));
+        indices
+          .filter((index) => !state.translations.has(index))
+          .forEach((index) => state.translationErrors.set(index, error.message));
       }
     } finally {
-      state.translationControllers.delete(controller);
-      if (token !== state.loadToken || transcriptId !== state.transcriptId) return;
+      if (controller) state.translationControllers.delete(controller);
+      if (token !== state.loadToken || transcriptId !== state.transcriptId || engine !== state.translationEngine) return;
       indices.forEach((index) => {
         state.translationInFlight.delete(index);
         updateTranslationNodes(index);
@@ -1003,14 +1190,20 @@
     elements.aiModel.value = config.model || "deepseek-v4-flash";
     elements.aiApiKey.value = "";
     elements.aiSettingsError.textContent = "";
-    elements.aiConfigStatus.textContent = state.languageAvailable
-      ? `Connected · ${config.model || "model configured"}`
-      : "Not configured";
+    syncTranslationSettingsForm();
+    elements.aiConfigStatus.textContent = state.translationEngine === "chrome"
+      ? "Chrome translation selected"
+      : state.languageAvailable
+        ? `API connected · ${config.model || "model configured"}`
+        : "API not configured";
     elements.aiKeyHint.textContent = config.hasApiKey
       ? "A key is configured, but is never returned to the browser. Paste a key to replace it."
       : "The key stays in server memory and is cleared when the server stops.";
     elements.aiSettingsModal.classList.remove("is-hidden");
-    window.requestAnimationFrame(() => elements.aiBaseUrl.focus());
+    window.requestAnimationFrame(() => {
+      if (state.translationEngine === "chrome") elements.translationEngineChrome.focus();
+      else elements.aiBaseUrl.focus();
+    });
   }
 
   function closeAiSettings() {
@@ -1020,28 +1213,52 @@
 
   async function saveAiSettings(event) {
     event.preventDefault();
+    const engine = elements.translationEngineChrome.checked ? "chrome" : "api";
     elements.aiSettingsError.textContent = "";
     elements.aiSettingsSave.disabled = true;
-    elements.aiSettingsSave.textContent = "Connecting…";
+    elements.aiSettingsSave.textContent = "Saving…";
     try {
-      const response = await fetch("/api/llm-config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          baseUrl: elements.aiBaseUrl.value,
-          model: elements.aiModel.value,
-          apiKey: elements.aiApiKey.value,
-        }),
-      });
-      const payload = await readApiPayload(response, "AI configuration could not be saved.");
-      applyLanguageCapabilities(payload);
+      if (engine === "chrome") {
+        if (state.chromeTranslationAvailability === "unavailable") {
+          throw new Error("此浏览器不支持 Chrome 内置翻译，请选择 Custom model API。");
+        }
+        setTranslationEngine("chrome");
+      } else {
+        const config = state.llmConfig || {};
+        const sameExistingConfig = state.languageAvailable
+          && elements.aiBaseUrl.value.trim() === String(config.baseUrl || "")
+          && elements.aiModel.value.trim() === String(config.model || "");
+        if (!elements.aiApiKey.value.trim() && !sameExistingConfig) {
+          throw new Error("使用 API 翻译时，请填写 API base URL、模型名称和 API key。");
+        }
+        if (!elements.aiBaseUrl.value.trim() || !elements.aiModel.value.trim()) {
+          throw new Error("请填写 API base URL 和模型名称。");
+        }
+        if (!sameExistingConfig || elements.aiApiKey.value.trim()) {
+          const response = await fetch("/api/llm-config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              baseUrl: elements.aiBaseUrl.value,
+              model: elements.aiModel.value,
+              apiKey: elements.aiApiKey.value,
+            }),
+          });
+          const payload = await readApiPayload(response, "AI configuration could not be saved.");
+          applyLanguageCapabilities(payload);
+        }
+        setTranslationEngine("api");
+      }
       closeAiSettings();
-      showToast("AI connection saved", `${state.llmConfig.model} is ready for translations.`);
+      showToast(
+        "Translation settings saved",
+        engine === "chrome" ? "Chrome will translate subtitles on this device." : `${state.llmConfig.model} will translate subtitles through the API.`
+      );
     } catch (error) {
       elements.aiSettingsError.textContent = error.message;
     } finally {
       elements.aiSettingsSave.disabled = false;
-      elements.aiSettingsSave.textContent = "Save connection";
+      elements.aiSettingsSave.textContent = "Save settings";
     }
   }
 
@@ -1107,7 +1324,7 @@
     state.dictionaryController = null;
     openDictionary(selection);
     if (!state.languageAvailable) {
-      showDictionaryError("AI 语境词典尚未配置。请打开 AI settings 填写 API 信息。");
+      showDictionaryError("语境词典需要模型 API。请在 Translation 设置中选择 Custom model API 并完成配置。");
       return;
     }
     if (!state.transcriptId) {
@@ -1394,6 +1611,15 @@
   elements.aiSettingsButton.addEventListener("click", openAiSettings);
   elements.aiSettingsClose.addEventListener("click", closeAiSettings);
   elements.aiSettingsForm.addEventListener("submit", saveAiSettings);
+  [elements.translationEngineChrome, elements.translationEngineApi].forEach((input) => {
+    input.addEventListener("change", () => {
+      syncTranslationSettingsForm(input.value);
+      elements.aiConfigStatus.textContent = input.value === "chrome"
+        ? chromeAvailabilityText()
+        : state.languageAvailable ? "API connection is ready" : "API connection required";
+      elements.aiSettingsError.textContent = "";
+    });
+  });
   elements.aiSettingsModal.addEventListener("click", (event) => {
     if (event.target === elements.aiSettingsModal) closeAiSettings();
   });
@@ -1530,6 +1756,7 @@
   });
 
   state.ticker = window.setInterval(tickPlayback, 100);
+  detectChromeTranslationAvailability();
   loadLanguageCapabilities();
   updatePlaybackUI(0, true);
 })();

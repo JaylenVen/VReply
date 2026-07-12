@@ -1677,17 +1677,17 @@ svg {
   gap: 18px;
 }
 
-.settings-form label {
+.api-settings-fields label {
   display: grid;
   gap: 8px;
 }
 
-.settings-form label > span {
+.api-settings-fields label > span {
   font-size: 12px;
   font-weight: 650;
 }
 
-.settings-form input {
+.api-settings-fields input {
   width: 100%;
   height: 49px;
   padding: 0 14px;
@@ -1700,7 +1700,7 @@ svg {
   transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
-.settings-form input:focus {
+.api-settings-fields input:focus {
   border-color: rgba(232, 114, 71, 0.72);
   background: white;
   box-shadow: 0 0 0 4px rgba(232, 114, 71, 0.1);
@@ -1711,6 +1711,135 @@ svg {
   color: var(--muted);
   font-size: 10px;
   line-height: 1.5;
+}
+
+.engine-picker {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  gap: 10px;
+}
+
+.engine-picker legend {
+  margin-bottom: 9px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.engine-option {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  min-height: 72px;
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #f5f2eb;
+  cursor: pointer;
+  gap: 12px;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.engine-option:hover {
+  transform: translateY(-1px);
+  border-color: rgba(21, 24, 21, 0.27);
+  background: white;
+}
+
+.engine-option:has(input:checked) {
+  border-color: var(--ink);
+  background: var(--paper-strong);
+  box-shadow: inset 3px 0 0 var(--acid);
+}
+
+.engine-option.is-unavailable {
+  opacity: 0.56;
+}
+
+.engine-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.engine-indicator {
+  position: relative;
+  width: 17px;
+  height: 17px;
+  border: 1.5px solid #9d9d94;
+  border-radius: 50%;
+}
+
+.engine-option input:checked + .engine-indicator {
+  border-color: var(--ink);
+}
+
+.engine-option input:checked + .engine-indicator::after {
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--ink);
+  content: "";
+}
+
+.engine-option input:focus-visible + .engine-indicator {
+  outline: 2px solid var(--warm);
+  outline-offset: 3px;
+}
+
+.engine-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.engine-copy b {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 680;
+  gap: 8px;
+}
+
+.engine-copy em {
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--acid);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.api-settings-fields {
+  display: grid;
+  padding-top: 2px;
+  gap: 18px;
+  transition: opacity 160ms ease;
+}
+
+.api-settings-fields.is-secondary {
+  display: none;
+}
+
+.api-settings-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-top: 3px;
+  border-top: 1px solid var(--line);
+  gap: 12px;
+}
+
+.api-settings-heading > span {
+  padding-top: 17px;
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .settings-error {
