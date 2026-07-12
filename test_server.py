@@ -34,12 +34,15 @@ class NormalizeJson3SegmentsTests(unittest.TestCase):
 
         result = server.normalize_json3_segments(payload)
 
-        self.assertEqual(len(result), 2)
+        self.assertEqual(len(result), 3)
         self.assertEqual(result[0]["end"], result[1]["start"])
-        self.assertEqual([word["text"] for word in result[0]["words"]], ["Uh", "hello", "everyone.", "Jack"])
+        self.assertEqual(result[1]["end"], result[2]["start"])
+        self.assertEqual(result[0]["text"], "Uh hello everyone.")
+        self.assertEqual(result[1]["text"], "Jack Manong.")
+        self.assertEqual([word["text"] for word in result[0]["words"]], ["Uh", "hello", "everyone."])
         self.assertEqual(result[0]["words"][0]["start"], 4.08)
         self.assertEqual(result[0]["words"][1]["start"], 4.28)
-        self.assertEqual(result[0]["words"][-1]["end"], 5.84)
+        self.assertEqual(result[1]["words"][-1]["end"], 6.24)
 
     def test_words_without_offsets_are_evenly_inferred(self) -> None:
         payload = {
@@ -58,6 +61,52 @@ class NormalizeJson3SegmentsTests(unittest.TestCase):
             [(word["start"], word["end"]) for word in result[0]["words"]],
             [(1.0, 2.0), (2.0, 3.0), (3.0, 4.0)],
         )
+
+    def test_fragments_are_merged_until_sentence_punctuation(self) -> None:
+        payload = {
+            "events": [
+                {"tStartMs": 0, "dDurationMs": 1000, "segs": [{"utf8": "We learned a"}]},
+                {"tStartMs": 1000, "dDurationMs": 1000, "segs": [{"utf8": "lot about agents today."}]},
+                {"tStartMs": 2000, "dDurationMs": 1000, "segs": [{"utf8": "Does it work?"}]},
+                {"tStartMs": 3000, "dDurationMs": 1000, "segs": [{"utf8": "Yes, it does!"}]},
+            ]
+        }
+
+        result = server.normalize_json3_segments(payload)
+
+        self.assertEqual(
+            [segment["text"] for segment in result],
+            ["We learned a lot about agents today.", "Does it work?", "Yes, it does!"],
+        )
+        self.assertEqual(result[0]["start"], 0.0)
+        self.assertEqual(result[0]["end"], 2.0)
+
+    def test_common_abbreviation_does_not_end_a_sentence(self) -> None:
+        payload = {
+            "events": [
+                {
+                    "tStartMs": 0,
+                    "dDurationMs": 6000,
+                    "segs": [{"utf8": "Dr. Smith built it. It works."}],
+                }
+            ]
+        }
+
+        result = server.normalize_json3_segments(payload)
+
+        self.assertEqual([segment["text"] for segment in result], ["Dr. Smith built it.", "It works."])
+
+    def test_long_pause_is_a_safe_fallback_without_punctuation(self) -> None:
+        payload = {
+            "events": [
+                {"tStartMs": 0, "dDurationMs": 1000, "segs": [{"utf8": "First spoken thought"}]},
+                {"tStartMs": 3000, "dDurationMs": 1000, "segs": [{"utf8": "A new thought"}]},
+            ]
+        }
+
+        result = server.normalize_json3_segments(payload)
+
+        self.assertEqual([segment["text"] for segment in result], ["First spoken thought", "A new thought"])
 
 
 class LanguageServiceTests(unittest.TestCase):

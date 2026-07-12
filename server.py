@@ -45,6 +45,10 @@ MAX_TRANSLATION_SEGMENTS = 20
 MAX_TARGET_CONTEXT_CHARS = 2_000
 MAX_ADJACENT_CONTEXT_CHARS = 1_000
 MAX_BATCH_CONTEXT_CHARS = 24_000
+MAX_SENTENCE_WORDS = 50
+MAX_SENTENCE_CHARS = 320
+MAX_SENTENCE_SECONDS = 20.0
+SENTENCE_PAUSE_SECONDS = 1.5
 DEFAULT_LLM_BASE_URL = "https://api.deepseek.com"
 DEFAULT_LLM_MODEL = "deepseek-v4-flash"
 LANGUAGE_PROMPT_VERSION = "2026-07-12.1-openai-compatible"
@@ -64,6 +68,11 @@ USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/126.0.0.0 Safari/537.36"
 )
+
+_NON_TERMINAL_ABBREVIATIONS = {
+    "dr.", "e.g.", "etc.", "i.e.", "jr.", "mr.", "mrs.", "ms.",
+    "prof.", "sr.", "st.", "vs.",
+}
 
 _CACHE: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
 _CACHE_LOCK = threading.Lock()
@@ -481,8 +490,86 @@ def _caption_words(
     return words
 
 
+def _word_ends_sentence(text: str) -> bool:
+    token = text.rstrip('"\'’”)]}').casefold()
+    if token.endswith(("?", "!")):
+        return True
+    if not token.endswith("."):
+        return False
+    if token in _NON_TERMINAL_ABBREVIATIONS:
+        return False
+    if re.fullmatch(r"[a-z]\.", token) or re.fullmatch(r"(?:[a-z]\.){2,}", token):
+        return False
+    return True
+
+
+def _sentence_segments(cues: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Group word-timed caption cues into readable, sentence-sized segments."""
+
+    words = [
+        {
+            "text": str(word.get("text") or ""),
+            "start": _finite_number(word.get("start")),
+            "end": _finite_number(word.get("end")),
+        }
+        for cue in cues
+        for word in cue.get("words", [])
+        if isinstance(word, dict) and str(word.get("text") or "").strip()
+    ]
+    if not words:
+        return cues
+
+    grouped: list[dict[str, Any]] = []
+    current: list[dict[str, Any]] = []
+
+    def flush() -> None:
+        if not current:
+            return
+        start = float(current[0]["start"])
+        end = max(start + 0.1, float(current[-1]["end"]))
+        grouped.append(
+            {
+                "id": len(grouped) + 1,
+                "start": round(start, 3),
+                "end": round(end, 3),
+                "text": " ".join(str(word["text"]) for word in current),
+                "words": [
+                    {
+                        "text": str(word["text"]),
+                        "start": round(float(word["start"]), 3),
+                        "end": round(float(word["end"]), 3),
+                    }
+                    for word in current
+                ],
+            }
+        )
+        current.clear()
+
+    for index, word in enumerate(words):
+        current.append(word)
+        next_word = words[index + 1] if index + 1 < len(words) else None
+        text_length = sum(len(str(item["text"])) + 1 for item in current) - 1
+        duration = float(current[-1]["end"]) - float(current[0]["start"])
+        pause = (
+            max(0.0, float(next_word["start"]) - float(word["end"]))
+            if next_word is not None
+            else 0.0
+        )
+        fallback_boundary = (
+            len(current) >= MAX_SENTENCE_WORDS
+            or text_length >= MAX_SENTENCE_CHARS
+            or duration >= MAX_SENTENCE_SECONDS
+            or pause >= SENTENCE_PAUSE_SECONDS
+        )
+        if _word_ends_sentence(str(word["text"])) or fallback_boundary:
+            flush()
+
+    flush()
+    return grouped
+
+
 def normalize_json3_segments(payload: Any) -> list[dict[str, Any]]:
-    """Convert YouTube JSON3 events to non-overlapping, word-timed cues."""
+    """Convert YouTube JSON3 events to word-timed, sentence-sized segments."""
 
     if not isinstance(payload, dict) or not isinstance(payload.get("events"), list):
         raise APIError(502, "invalid_caption_data", "YouTube returned malformed caption data.")
@@ -552,7 +639,7 @@ def normalize_json3_segments(payload: Any) -> list[dict[str, Any]]:
 
     if not result:
         raise APIError(404, "empty_captions", "The selected English caption track is empty.")
-    return result
+    return _sentence_segments(result)
 
 
 def _best_thumbnail(video_details: dict[str, Any]) -> str | None:
