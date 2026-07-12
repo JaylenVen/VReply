@@ -109,6 +109,62 @@ class NormalizeJson3SegmentsTests(unittest.TestCase):
         self.assertEqual([segment["text"] for segment in result], ["First spoken thought", "A new thought"])
 
 
+class TranscriptCasingTests(unittest.TestCase):
+    def test_transcript_wide_uppercase_is_converted_to_readable_case(self) -> None:
+        texts = [
+            ">> BREAKING NEWS OVERNIGHT, THE DEATH OF U.S. SENATOR LINDSEY GRAHAM.",
+            "LET'S GET RIGHT TO JAY O'BRIEN, NOW IN WASHINGTON WITH THE DETAILS.",
+            "I THINK THIS WAS STUNNING! IT CHANGED EVERYTHING.",
+        ]
+        segments = [
+            {
+                "id": index + 1,
+                "start": float(index),
+                "end": float(index + 1),
+                "text": text,
+                "words": [{"text": token, "start": 0.0, "end": 0.1} for token in text.split()],
+            }
+            for index, text in enumerate(texts)
+        ]
+        metadata = {"title": "Lindsey Graham: Jay O'Brien Reports from Washington", "author": "ABC News"}
+
+        result = server.normalize_transcript_casing(segments, metadata)
+
+        self.assertEqual(
+            [segment["text"] for segment in result],
+            [
+                ">> Breaking news overnight, the death of U.S. senator Lindsey Graham.",
+                "Let's get right to Jay O'Brien, now in Washington with the details.",
+                "I think this was stunning! It changed everything.",
+            ],
+        )
+        self.assertEqual(result[1]["words"][:4], [
+            {"text": "Let's", "start": 0.0, "end": 0.1},
+            {"text": "get", "start": 0.0, "end": 0.1},
+            {"text": "right", "start": 0.0, "end": 0.1},
+            {"text": "to", "start": 0.0, "end": 0.1},
+        ])
+        self.assertEqual(segments[0]["text"], texts[0])
+
+    def test_mixed_case_transcript_is_left_unchanged(self) -> None:
+        segments = [
+            {"id": 1, "text": "This sentence is already easy to read."},
+            {"id": 2, "text": "NASA uses uppercase because it is an acronym."},
+            {"id": 3, "text": "A final normal sentence stays untouched."},
+        ]
+
+        result = server.normalize_transcript_casing(segments, {"title": "Normal Video"})
+
+        self.assertIs(result, segments)
+
+    def test_short_uppercase_emphasis_is_not_treated_as_an_uppercase_source(self) -> None:
+        segments = [{"id": 1, "text": "THIS IS IMPORTANT!"}]
+
+        result = server.normalize_transcript_casing(segments)
+
+        self.assertIs(result, segments)
+
+
 class LanguageServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         with server._CACHE_LOCK:

@@ -77,6 +77,38 @@ _NON_TERMINAL_ABBREVIATIONS = {
     "prof.", "sr.", "st.", "vs.",
 }
 
+_READABLE_CASE_ACRONYMS = {
+    "ai": "AI",
+    "api": "API",
+    "bbc": "BBC",
+    "cia": "CIA",
+    "cnn": "CNN",
+    "covid-19": "COVID-19",
+    "dna": "DNA",
+    "eu": "EU",
+    "fbi": "FBI",
+    "nasa": "NASA",
+    "nato": "NATO",
+    "nba": "NBA",
+    "nfl": "NFL",
+    "tv": "TV",
+    "u.k.": "U.K.",
+    "u.n.": "U.N.",
+    "u.s.": "U.S.",
+    "uk": "UK",
+    "un": "UN",
+    "usa": "USA",
+}
+
+_TITLE_CASE_COMMON_WORDS = {
+    "a", "about", "after", "all", "and", "are", "as", "at", "be", "before", "breaking",
+    "but", "by", "day", "death", "details", "died", "dies", "explains", "for", "from", "full",
+    "get", "has", "have", "how", "in", "interview", "into", "is", "it", "latest", "life", "live",
+    "more", "news", "new", "of", "on", "or", "overnight", "over", "reacts", "report", "reports",
+    "says", "show", "speaks", "talk", "talks", "the", "this", "to", "today", "video", "watch",
+    "what", "when", "where", "why", "with",
+}
+
 _CACHE: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
 _CACHE_LOCK = threading.Lock()
 _TRANSCRIPT_INDEX: dict[str, dict[str, Any]] = {}
@@ -431,6 +463,109 @@ def _clean_caption_text(value: str) -> str:
     return " ".join(value.split()).strip()
 
 
+def _transcript_is_all_caps(segments: list[dict[str, Any]]) -> bool:
+    eligible: list[str] = []
+    total_letters = 0
+    total_uppercase = 0
+    uppercase_segments = 0
+    for segment in segments:
+        text = str(segment.get("text") or "")
+        letters = re.findall(r"[A-Za-z]", text)
+        if len(letters) < 4:
+            continue
+        eligible.append(text)
+        uppercase = sum(letter.isupper() for letter in letters)
+        total_letters += len(letters)
+        total_uppercase += uppercase
+        if uppercase / len(letters) >= 0.9:
+            uppercase_segments += 1
+    return (
+        len(eligible) >= 3
+        and total_letters >= 60
+        and total_uppercase / total_letters >= 0.94
+        and uppercase_segments / len(eligible) >= 0.8
+    )
+
+
+def _metadata_case_hints(metadata: dict[str, Any] | None) -> dict[str, str]:
+    hints = dict(_READABLE_CASE_ACRONYMS)
+    if not isinstance(metadata, dict):
+        return hints
+    for source in (metadata.get("title"), metadata.get("author")):
+        if not isinstance(source, str):
+            continue
+        tokens = re.findall(r"[A-Za-z]+(?:['’][A-Za-z]+)*(?:-[A-Za-z0-9]+)*", source)
+        for token in tokens:
+            key = token.casefold().replace("’", "'")
+            letters = re.sub(r"[^A-Za-z]", "", token)
+            if len(letters) < 2 or key in _TITLE_CASE_COMMON_WORDS:
+                continue
+            if token.isupper() and len(letters) <= 8 or token[0].isupper():
+                hints[key] = token
+    return hints
+
+
+def _readable_sentence_case(text: str, hints: dict[str, str]) -> str:
+    value = text.lower().replace("’", "'")
+    value = re.sub(r"\bi\b", "I", value)
+    value = re.sub(
+        r"(?<![A-Za-z])o'([a-z])",
+        lambda match: "O'" + match.group(1).upper(),
+        value,
+    )
+    for key, replacement in sorted(hints.items(), key=lambda item: len(item[0]), reverse=True):
+        value = re.sub(
+            rf"(?<![A-Za-z]){re.escape(key)}(?![A-Za-z])",
+            replacement,
+            value,
+            flags=re.IGNORECASE,
+        )
+
+    characters = list(value)
+    capitalize_next = True
+    for index, character in enumerate(characters):
+        if capitalize_next and character.isascii() and character.isalpha():
+            if character.islower():
+                characters[index] = character.upper()
+            capitalize_next = False
+        if character in "!?":
+            capitalize_next = True
+            continue
+        if character != "." or index + 1 < len(characters) and not characters[index + 1].isspace():
+            continue
+        prefix = "".join(characters[: index + 1])
+        token_match = re.search(r"([A-Za-z.]+\.)$", prefix)
+        token = token_match.group(1).casefold() if token_match else ""
+        if token in _NON_TERMINAL_ABBREVIATIONS or re.fullmatch(r"(?:[a-z]\.){2,}", token):
+            continue
+        capitalize_next = True
+    return "".join(characters)
+
+
+def normalize_transcript_casing(
+    segments: list[dict[str, Any]],
+    metadata: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Convert transcript-wide uppercase captions to readable sentence case."""
+
+    if not _transcript_is_all_caps(segments):
+        return segments
+    hints = _metadata_case_hints(metadata)
+    normalized = copy.deepcopy(segments)
+    for segment in normalized:
+        text = _readable_sentence_case(str(segment.get("text") or ""), hints)
+        segment["text"] = text
+        tokens = text.split()
+        words = segment.get("words")
+        if isinstance(words, list) and len(words) == len(tokens):
+            for word, token in zip(words, tokens):
+                if isinstance(word, dict):
+                    word["text"] = token
+        elif isinstance(words, list):
+            segment["words"] = []
+    return normalized
+
+
 def _caption_words(
     segments: list[Any],
     *,
@@ -779,10 +914,11 @@ def transcribe_youtube(url: Any) -> dict[str, Any]:
     except (UnicodeError, json.JSONDecodeError) as exc:
         raise APIError(502, "invalid_caption_data", "YouTube returned unreadable caption data.") from exc
 
-    result = {
-        "segments": normalize_json3_segments(caption_payload),
-        "metadata": _metadata(video_id, player_response, track),
-    }
+    metadata = _metadata(video_id, player_response, track)
+    raw_segments = normalize_json3_segments(caption_payload)
+    segments = normalize_transcript_casing(raw_segments, metadata)
+    metadata["captions"]["casingNormalized"] = segments is not raw_segments
+    result = {"segments": segments, "metadata": metadata}
     result["transcriptId"] = _make_transcript_id(video_id, result)
     _cache_put(video_id, result)
     result["cached"] = False
