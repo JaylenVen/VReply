@@ -20,6 +20,7 @@ import math
 import os
 import re
 import socket
+import sqlite3
 import threading
 from collections import OrderedDict
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -31,6 +32,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 ROOT_DIR = Path(__file__).resolve().parent
+LOCAL_DICTIONARY_PATH = ROOT_DIR / "data" / "ecdict.sqlite3"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 4173
 MAX_REQUEST_BYTES = 16 * 1024
@@ -797,6 +799,10 @@ def language_capabilities() -> dict[str, Any]:
         reason = None
     return {
         "ok": True,
+        "localDictionary": {
+            "available": LOCAL_DICTIONARY_PATH.is_file(),
+            "name": "ECDICT" if LOCAL_DICTIONARY_PATH.is_file() else None,
+        },
         "aiLanguage": {
             "available": available,
             "reason": reason,
@@ -1399,9 +1405,95 @@ def translate_segments(payload: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True, "targetLanguage": target_language, "translations": translations}
 
 
+_POS_NAMES = {
+    "a": "形容词",
+    "adj": "形容词",
+    "ad": "副词",
+    "adv": "副词",
+    "art": "冠词",
+    "aux": "助动词",
+    "conj": "连词",
+    "int": "感叹词",
+    "interj": "感叹词",
+    "n": "名词",
+    "num": "数词",
+    "prep": "介词",
+    "pron": "代词",
+    "r": "副词",
+    "v": "动词",
+    "vi": "不及物动词",
+    "vt": "及物动词",
+}
+
+
+def _dictionary_part_of_speech(raw_pos: str, translation: str) -> str:
+    codes = re.findall(r"(?:^|/)([a-z]+):", raw_pos.casefold())
+    if not codes:
+        codes = re.findall(
+            r"(?m)^(n|v|vi|vt|a|adj|ad|adv|prep|pron|conj|art|num|int|interj)\.",
+            translation.casefold(),
+        )
+    names: list[str] = []
+    for code in codes:
+        name = _POS_NAMES.get(code)
+        if name and name not in names:
+            names.append(name)
+    return " / ".join(names)
+
+
+def _local_dictionary_lookup(selection: str) -> dict[str, Any] | None:
+    if not LOCAL_DICTIONARY_PATH.is_file():
+        return None
+    query = " ".join(selection.casefold().replace("’", "'").split())
+    query = re.sub(r"^[^a-z]+|[^a-z]+$", "", query)
+    if not query or len(query) > 80:
+        return None
+
+    try:
+        connection = sqlite3.connect(LOCAL_DICTIONARY_PATH)
+        connection.execute("PRAGMA query_only = ON")
+        row = connection.execute(
+            "SELECT word, phonetic, translation, definition, pos FROM entries WHERE word = ? COLLATE NOCASE",
+            (query,),
+        ).fetchone()
+        if row is None:
+            row = connection.execute(
+                """
+                SELECT e.word, e.phonetic, e.translation, e.definition, e.pos
+                FROM aliases AS a JOIN entries AS e ON e.word = a.word
+                WHERE a.alias = ? COLLATE NOCASE
+                """,
+                (query,),
+            ).fetchone()
+    except sqlite3.Error as exc:
+        raise APIError(500, "dictionary_unavailable", "The local dictionary could not be read.") from exc
+    finally:
+        if "connection" in locals():
+            connection.close()
+
+    if row is None:
+        return None
+    word, phonetic, translation, _definition, raw_pos = (str(value or "") for value in row)
+    meaning = translation.replace("\\n", "\n").strip()
+    pronunciation = phonetic.strip()
+    if pronunciation and not pronunciation.startswith("/"):
+        pronunciation = f"/{pronunciation}/"
+    return {
+        "selection": selection,
+        "headword": word,
+        "pronunciation": pronunciation,
+        "partOfSpeech": _dictionary_part_of_speech(raw_pos, meaning),
+        "meaning": meaning,
+        "contextMeaning": "本地词典提供通用释义，未使用模型分析当前句子。",
+        "example": "",
+        "exampleTranslation": "",
+        "cached": False,
+        "source": "local",
+        "dictionary": "ECDICT",
+    }
+
+
 def define_selection(payload: dict[str, Any]) -> dict[str, Any]:
-    llm = _llm_config()
-    api_key, base_url, model = llm["apiKey"], llm["baseUrl"], llm["model"]
     transcript = _get_transcript(payload.get("transcriptId"))
     target_language = _validate_target_language(payload.get("targetLanguage"))
     segment_id = payload.get("segmentId")
@@ -1423,6 +1515,22 @@ def define_selection(payload: dict[str, Any]) -> dict[str, Any]:
         word_pattern = rf"(?<!\w){re.escape(selection)}(?!\w)"
         if re.search(word_pattern, context_text, flags=re.IGNORECASE | re.UNICODE) is None:
             raise APIError(400, "selection_not_in_segment", "The selected word is not in this transcript line.")
+
+    local_entry = _local_dictionary_lookup(selection)
+    if local_entry is not None:
+        return {"ok": True, "entry": local_entry}
+
+    try:
+        llm = _llm_config()
+    except APIError as exc:
+        if exc.code == "ai_not_configured":
+            raise APIError(
+                404,
+                "dictionary_entry_not_found",
+                "本地词典暂未收录该词或短语。配置模型 API 后可使用 AI 语境解释。",
+            ) from exc
+        raise
+    api_key, base_url, model = llm["apiKey"], llm["baseUrl"], llm["model"]
 
     key = _language_cache_key("dictionary", f"{base_url}|{model}", [target_language, selection.casefold(), context])
     cached = _language_cache_get(key)

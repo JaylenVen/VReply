@@ -81,6 +81,7 @@
     dictionaryContent: document.getElementById("dictionaryContent"),
     dictionaryMeaning: document.getElementById("dictionaryMeaning"),
     dictionaryContext: document.getElementById("dictionaryContext"),
+    dictionaryExampleBlock: document.getElementById("dictionaryExampleBlock"),
     dictionaryExample: document.getElementById("dictionaryExample"),
     dictionaryExampleTranslation: document.getElementById("dictionaryExampleTranslation"),
     toast: document.getElementById("toast"),
@@ -1305,11 +1306,16 @@
 
   function renderDictionaryEntry(entry) {
     elements.dictionaryTerm.textContent = entry.headword || entry.selection;
-    elements.dictionaryMeta.textContent = [entry.partOfSpeech, entry.pronunciation].filter(Boolean).join(" · ");
+    const source = entry.source === "local" ? `本地 · ${entry.dictionary || "ECDICT"}` : "AI 语境解释";
+    elements.dictionaryMeta.textContent = [source, entry.partOfSpeech, entry.pronunciation].filter(Boolean).join(" · ");
     elements.dictionaryMeaning.textContent = entry.meaning;
     elements.dictionaryContext.textContent = entry.contextMeaning;
     elements.dictionaryExample.textContent = entry.example;
     elements.dictionaryExampleTranslation.textContent = entry.exampleTranslation;
+    elements.dictionaryExampleBlock.classList.toggle(
+      "is-hidden",
+      !String(entry.example || "").trim() && !String(entry.exampleTranslation || "").trim()
+    );
     elements.dictionaryStatus.textContent = "";
     elements.dictionaryStatus.classList.remove("is-error");
     elements.dictionaryContent.classList.remove("is-hidden");
@@ -1323,10 +1329,6 @@
     if (state.dictionaryController) state.dictionaryController.abort();
     state.dictionaryController = null;
     openDictionary(selection);
-    if (!state.languageAvailable) {
-      showDictionaryError("语境词典需要模型 API。请在 Translation 设置中选择 Custom model API 并完成配置。");
-      return;
-    }
     if (!state.transcriptId) {
       showDictionaryError("当前字幕已失效，请重新导入视频。");
       return;

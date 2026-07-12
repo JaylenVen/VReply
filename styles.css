@@ -1280,6 +1280,10 @@ svg {
   line-height: 1.65;
 }
 
+.dictionary-meaning {
+  white-space: pre-line;
+}
+
 .dictionary-context {
   margin-top: 11px;
   padding: 11px 13px;

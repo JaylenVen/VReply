@@ -205,7 +205,9 @@ class LanguageServiceTests(unittest.TestCase):
             "selection": "take off",
             "targetLanguage": "zh-CN",
         }
-        with self._env(), patch.object(server, "_call_llm_structured", side_effect=fake_call):
+        with self._env(), patch.object(server, "_local_dictionary_lookup", return_value=None), patch.object(
+            server, "_call_llm_structured", side_effect=fake_call
+        ):
             first = server.define_selection(payload)
             second = server.define_selection(payload)
 
@@ -213,6 +215,47 @@ class LanguageServiceTests(unittest.TestCase):
         self.assertEqual(calls[0]["input_data"]["context"]["previous"], "We turned the system on.")
         self.assertFalse(first["entry"]["cached"])
         self.assertTrue(second["entry"]["cached"])
+
+    def test_local_dictionary_works_without_an_api_key(self) -> None:
+        payload = {
+            "transcriptId": self.transcript["transcriptId"],
+            "segmentId": 2,
+            "selection": "take off",
+            "targetLanguage": "zh-CN",
+        }
+        with patch.dict(
+            os.environ,
+            {"VREPLY_LLM_API_KEY": "", "DEEPSEEK_API_KEY": "", "OPENAI_API_KEY": ""},
+        ), patch.object(server, "_call_llm_structured") as ai_call:
+            result = server.define_selection(payload)
+
+        self.assertEqual(result["entry"]["source"], "local")
+        self.assertEqual(result["entry"]["dictionary"], "ECDICT")
+        self.assertIn("起飞", result["entry"]["meaning"])
+        ai_call.assert_not_called()
+
+    def test_local_dictionary_resolves_inflected_word_aliases(self) -> None:
+        entry = server._local_dictionary_lookup("agents")
+
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry["headword"], "agent")
+
+    def test_missing_local_entry_explains_optional_ai_fallback(self) -> None:
+        payload = {
+            "transcriptId": self.transcript["transcriptId"],
+            "segmentId": 2,
+            "selection": "project can",
+            "targetLanguage": "zh-CN",
+        }
+        with patch.dict(
+            os.environ,
+            {"VREPLY_LLM_API_KEY": "", "DEEPSEEK_API_KEY": "", "OPENAI_API_KEY": ""},
+        ), patch.object(server, "_local_dictionary_lookup", return_value=None), self.assertRaises(
+            server.APIError
+        ) as raised:
+            server.define_selection(payload)
+
+        self.assertEqual(raised.exception.code, "dictionary_entry_not_found")
 
     def test_dictionary_rejects_text_outside_the_selected_line(self) -> None:
         with self._env(), self.assertRaises(server.APIError) as raised:
