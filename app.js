@@ -80,6 +80,7 @@
     searchResultCount: document.getElementById("searchResultCount"),
     downloadButton: document.getElementById("downloadButton"),
     translationToggle: document.getElementById("translationToggle"),
+    translationProgress: document.getElementById("translationProgress"),
     languageStatus: document.getElementById("languageStatus"),
     dictionaryCard: document.getElementById("dictionaryCard"),
     dictionaryClose: document.getElementById("dictionaryClose"),
@@ -135,6 +136,7 @@
     translationInFlight: new Set(),
     translationControllers: new Set(),
     translationTimer: null,
+    translationActiveBatches: 0,
     translationObserver: null,
     dictionaryCache: new Map(),
     dictionaryController: null,
@@ -212,6 +214,7 @@
     state.translationInFlight.clear();
     state.translationControllers.forEach((controller) => controller.abort());
     state.translationControllers.clear();
+    state.translationActiveBatches = 0;
     state.dictionaryCache.clear();
     state.phrasePointer = null;
     state.suppressWordClick = false;
@@ -902,6 +905,7 @@
     elements.translationToggle.disabled = !enabled;
     elements.translationToggle.classList.toggle("is-active", state.showTranslations);
     elements.translationToggle.setAttribute("aria-pressed", String(state.showTranslations));
+    updateTranslationProgress();
     if (state.translationEngine === "chrome") {
       elements.translationToggle.title = available
         ? "使用 Chrome 内置翻译显示或隐藏简体中文译文"
@@ -920,6 +924,27 @@
       "is-unavailable",
       state.chromeTranslationAvailability === "unavailable"
     );
+  }
+
+  function updateTranslationProgress() {
+    const total = state.transcript.length;
+    const finished = Math.min(total, state.translations.size + state.translationErrors.size);
+    const percent = total ? Math.round((finished / total) * 100) : 0;
+    const visible = state.showTranslations && total > 0;
+    elements.translationProgress.textContent = `${percent}%`;
+    elements.translationProgress.classList.toggle("is-hidden", !visible);
+    elements.translationToggle.style.setProperty("--translation-progress", `${percent}%`);
+    if (visible) {
+      const failed = state.translationErrors.size;
+      elements.translationToggle.setAttribute(
+        "aria-label",
+        failed
+          ? `整篇字幕翻译进度 ${percent}%，${failed} 句暂时失败`
+          : `整篇字幕翻译进度 ${percent}%`
+      );
+    } else {
+      elements.translationToggle.removeAttribute("aria-label");
+    }
   }
 
   function updateTranslationNode(node, index) {
@@ -1044,6 +1069,7 @@
   function clearTranslationResults() {
     state.translationControllers.forEach((controller) => controller.abort());
     state.translationControllers.clear();
+    state.translationActiveBatches = 0;
     if (state.translationTimer) window.clearTimeout(state.translationTimer);
     state.translationTimer = null;
     state.translationQueue.clear();
@@ -1106,14 +1132,10 @@
     elements.transcriptList.querySelectorAll(".line-translation").forEach((node) => {
       const index = Number(node.dataset.index);
       updateTranslationNode(node, index);
-      if (state.showTranslations) {
-        const nodeRect = node.getBoundingClientRect();
-        const scrollRect = elements.transcriptScroll.getBoundingClientRect();
-        if (nodeRect.bottom >= scrollRect.top - 120 && nodeRect.top <= scrollRect.bottom + 120) {
-          queueTranslation(index);
-        }
-      }
     });
+    if (state.showTranslations) {
+      state.transcript.forEach((_segment, index) => queueTranslation(index));
+    }
   }
 
   function queueTranslation(index) {
@@ -1127,12 +1149,16 @@
     state.translationErrors.delete(index);
     state.translationQueue.add(index);
     updateTranslationNodes(index);
-    if (state.translationTimer) return;
+    updateTranslationProgress();
+    const maxConcurrentBatches = state.translationEngine === "api" ? 2 : 1;
+    if (state.translationTimer || state.translationActiveBatches >= maxConcurrentBatches) return;
     state.translationTimer = window.setTimeout(flushTranslationQueue, 45);
   }
 
   async function flushTranslationQueue() {
     state.translationTimer = null;
+    const maxConcurrentBatches = state.translationEngine === "api" ? 2 : 1;
+    if (state.translationActiveBatches >= maxConcurrentBatches) return;
     const indices = Array.from(state.translationQueue).slice(0, 20);
     indices.forEach((index) => {
       state.translationQueue.delete(index);
@@ -1140,11 +1166,15 @@
       updateTranslationNodes(index);
     });
     if (!indices.length) return;
+    state.translationActiveBatches += 1;
     const token = state.loadToken;
     const transcriptId = state.transcriptId;
     const engine = state.translationEngine;
     const controller = engine === "api" ? new AbortController() : null;
     if (controller) state.translationControllers.add(controller);
+    if (state.translationQueue.size && state.translationActiveBatches < maxConcurrentBatches) {
+      state.translationTimer = window.setTimeout(flushTranslationQueue, 0);
+    }
     try {
       if (engine === "chrome") {
         const translator = state.chromeTranslator;
@@ -1156,6 +1186,7 @@
           state.translations.set(index, { text: translatedText, note: "" });
           state.translationErrors.delete(index);
           updateTranslationNodes(index);
+          updateTranslationProgress();
         }
       } else {
         const response = await fetch("/api/translate", {
@@ -1180,20 +1211,24 @@
           });
           state.translationErrors.delete(index);
         });
+        updateTranslationProgress();
       }
     } catch (error) {
       if (error.name !== "AbortError" && token === state.loadToken && transcriptId === state.transcriptId) {
         indices
           .filter((index) => !state.translations.has(index))
           .forEach((index) => state.translationErrors.set(index, error.message));
+        updateTranslationProgress();
       }
     } finally {
       if (controller) state.translationControllers.delete(controller);
       if (token !== state.loadToken || transcriptId !== state.transcriptId || engine !== state.translationEngine) return;
+      state.translationActiveBatches = Math.max(0, state.translationActiveBatches - 1);
       indices.forEach((index) => {
         state.translationInFlight.delete(index);
         updateTranslationNodes(index);
       });
+      updateTranslationProgress();
       if (state.translationQueue.size && !state.translationTimer) {
         state.translationTimer = window.setTimeout(flushTranslationQueue, 45);
       }
@@ -1579,6 +1614,7 @@
     state.suppressWordClick = false;
     state.translationControllers.forEach((controller) => controller.abort());
     state.translationControllers.clear();
+    state.translationActiveBatches = 0;
     if (state.translationTimer) window.clearTimeout(state.translationTimer);
     state.translationTimer = null;
     if (state.translationObserver) state.translationObserver.disconnect();
@@ -1783,6 +1819,10 @@
 
   document.addEventListener("pointerdown", (event) => {
     if (!event.target.closest(".tuning-menu")) closeTuningPopovers();
+    if (
+      !elements.dictionaryCard.classList.contains("is-hidden")
+      && !event.target.closest("#dictionaryCard")
+    ) closeDictionary();
   });
 
   setPlaybackSpeed(SPEEDS.indexOf(state.speed));

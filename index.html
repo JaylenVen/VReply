@@ -51,17 +51,17 @@
       <section class="landing-view" id="landingView" aria-labelledby="heroTitle">
         <div class="landing-copy">
           <div class="eyebrow reveal reveal-1">
-            从看懂，到说出
+            Video to voice
           </div>
 
           <h1 id="heroTitle" class="hero-title reveal reveal-2">
-            <span>看一遍。</span>
-            <span class="hero-title-serif">说出来。</span>
+            <span>Watch it.</span>
+            <span class="hero-title-serif">Own the words.</span>
           </h1>
 
           <p class="hero-description reveal reveal-3">
-            粘贴一段英语视频，在真实语境里听清、跟读、开口。
-            每一句字幕都会跟上你的进度。
+            Turn a YouTube video into a focused English speaking room.
+            Paste, listen, repeat — the transcript keeps your place.
           </p>
         </div>
 
@@ -211,9 +211,14 @@
                 <h2>逐句字幕 <small id="transcriptCount">0</small></h2>
               </div>
               <div class="transcript-actions">
+                <button class="follow-toggle is-active" id="followToggle" type="button" aria-label="自动跟随字幕" aria-pressed="true" title="自动跟随字幕">
+                  <span><i></i></span>
+                  <b>跟随</b>
+                </button>
                 <button class="translation-toggle" id="translationToggle" type="button" aria-pressed="false" aria-describedby="languageStatus" disabled>
                   <span aria-hidden="true">译</span>
                   <b>译文</b>
+                  <small class="is-hidden" id="translationProgress" aria-live="polite">0%</small>
                 </button>
                 <span class="sr-only" id="languageStatus" aria-live="polite"></span>
                 <button class="icon-button" id="searchButton" type="button" aria-label="搜索字幕">
@@ -229,13 +234,6 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></svg>
               <input id="transcriptSearch" type="search" placeholder="搜索单词或句子" autocomplete="off" />
               <span id="searchResultCount">0</span>
-            </div>
-
-            <div class="transcript-options">
-              <button class="follow-toggle is-active" id="followToggle" type="button" aria-pressed="true">
-                <span><i></i></span>
-                自动跟随
-              </button>
             </div>
 
             <section class="dictionary-card is-hidden" id="dictionaryCard" role="dialog" aria-live="polite" aria-label="语境词典">

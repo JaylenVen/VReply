@@ -487,11 +487,12 @@ svg {
 .project-identity h1 {
   overflow: hidden;
   margin: 0;
+  padding: 0.08em 0 0.16em;
   font-size: clamp(17px, 1.5vw, 23px);
   font-variation-settings: "wdth" 90;
   font-weight: 650;
   letter-spacing: -0.035em;
-  line-height: 1;
+  line-height: 1.18;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -727,6 +728,12 @@ svg {
 
 .caption-overlay .caption-word.is-current {
   color: var(--acid);
+}
+
+#captionText,
+.line-copy,
+.dictionary-example p {
+  font-family: Helvetica, "Helvetica Neue", Arial, sans-serif;
 }
 
 .caption-copy .caption-translation {
@@ -1255,7 +1262,14 @@ svg {
   gap: 7px;
 }
 
+.transcript-actions .follow-toggle {
+  margin-right: 3px;
+  padding-right: 10px;
+  border-right: 1px solid var(--line);
+}
+
 .translation-toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
   height: 34px;
@@ -1267,6 +1281,23 @@ svg {
   color: var(--muted);
   cursor: pointer;
   transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
+}
+
+.translation-toggle::before {
+  position: absolute;
+  right: 5px;
+  bottom: 2px;
+  left: 5px;
+  height: 1px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    currentColor var(--translation-progress, 0%),
+    rgba(255, 255, 255, 0.1) var(--translation-progress, 0%)
+  );
+  content: "";
+  opacity: 0;
+  transition: opacity 180ms ease;
 }
 
 .translation-toggle span {
@@ -1283,6 +1314,24 @@ svg {
 .translation-toggle b {
   font-size: 10px;
   font-weight: 620;
+}
+
+.translation-toggle small {
+  min-width: 25px;
+  color: currentColor;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.translation-toggle.is-active::before {
+  opacity: 0.68;
+}
+
+.translation-toggle.is-active b {
+  display: none;
 }
 
 .translation-toggle:hover,
@@ -1340,15 +1389,6 @@ svg {
   font-size: 8px;
 }
 
-.transcript-options {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  min-height: 47px;
-  padding: 0 21px;
-  border-bottom: 1px solid var(--line);
-}
-
 .follow-toggle {
   display: inline-flex;
   align-items: center;
@@ -1359,6 +1399,12 @@ svg {
   color: var(--muted);
   font-size: 10px;
   cursor: pointer;
+}
+
+.follow-toggle b {
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .follow-toggle > span {
@@ -1403,10 +1449,10 @@ svg {
 .dictionary-card {
   position: absolute;
   z-index: 20;
-  top: 126px;
+  top: 84px;
   right: 12px;
   left: 12px;
-  max-height: calc(100% - 142px);
+  max-height: calc(100% - 100px);
   padding: 18px;
   overflow-y: auto;
   border: 1px solid var(--line);
@@ -1431,7 +1477,7 @@ svg {
 .dictionary-card strong {
   display: block;
   overflow-wrap: anywhere;
-  font-family: var(--font-serif);
+  font-family: Helvetica, "Helvetica Neue", Arial, sans-serif;
   font-size: 27px;
   font-weight: 500;
   letter-spacing: -0.035em;
@@ -2223,6 +2269,15 @@ svg {
 /* Responsive */
 
 @media (max-width: 1180px) {
+  .transcript-actions .follow-toggle b {
+    display: none;
+  }
+
+  .transcript-actions .follow-toggle {
+    margin-right: 0;
+    padding-right: 8px;
+  }
+
   .landing-view {
     grid-template-columns: minmax(320px, 0.78fr) minmax(490px, 1.22fr);
     gap: 54px;
