@@ -184,6 +184,48 @@ class LanguageServiceTests(unittest.TestCase):
         self.assertFalse(first["translations"][0]["cached"])
         self.assertTrue(second["translations"][0]["cached"])
 
+    def test_summary_uses_translation_api_config_and_is_cached(self) -> None:
+        calls = []
+
+        def fake_call(**kwargs):
+            calls.append(kwargs)
+            return {
+                "title": "项目启动后的结果",
+                "overview": "视频介绍了系统启动、项目推进以及结果出乎所有人预料的完整过程。",
+                "topics": ["系统启动", "项目推进", "意外结果"],
+                "points": [
+                    {"segmentId": 1, "heading": "启动系统", "text": "团队首先打开系统，为后续工作做好准备。"},
+                    {"segmentId": 2, "heading": "推进项目", "text": "系统运行后，项目得以正式进入快速推进阶段。"},
+                    {"segmentId": 3, "heading": "结果出现", "text": "最终结果超出所有人的预期，成为视频的结论。"},
+                ],
+            }
+
+        payload = {"transcriptId": self.transcript["transcriptId"], "targetLanguage": "zh-CN"}
+        with self._env(), patch.object(server, "_call_llm_structured", side_effect=fake_call):
+            first = server.summarize_transcript(payload)
+            second = server.summarize_transcript(payload)
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["schema_name"], "vreply_video_summary")
+        self.assertEqual(calls[0]["model"], "test-model")
+        self.assertEqual(calls[0]["input_data"]["lines"][1]["segmentId"], 2)
+        self.assertFalse(first["cached"])
+        self.assertTrue(second["cached"])
+        self.assertEqual(second["summary"]["points"][1]["heading"], "推进项目")
+
+    def test_summary_rejects_unknown_segment_references(self) -> None:
+        generated = {
+            "title": "无效总结",
+            "overview": "模型返回了一个不属于当前字幕的时间位置。",
+            "topics": ["测试"],
+            "points": [{"segmentId": 999, "heading": "错误位置", "text": "这个位置不存在。"}],
+        }
+        payload = {"transcriptId": self.transcript["transcriptId"], "targetLanguage": "zh-CN"}
+        with self._env(), patch.object(server, "_call_llm_structured", return_value=generated):
+            with self.assertRaises(server.APIError) as raised:
+                server.summarize_transcript(payload)
+        self.assertEqual(raised.exception.code, "ai_invalid_response")
+
     def test_dictionary_checks_selection_and_caches_contextual_entry(self) -> None:
         calls = []
 

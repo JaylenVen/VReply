@@ -4,9 +4,6 @@
   const DEFAULT_DURATION = 150;
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3];
   const TRANSLATION_ENGINE_KEY = "vreply:translation-engine";
-  const SUMMARY_STOPWORDS = new Set(
-    "about after again against all also and any are because been before being between both but can could did does doing down each few for from further had has have having here how into its itself just more most much must not now off once only other our out over own really said same should some such than that the their them then there these they this those through too under very was were what when where which while who why will with would you your we we're i'm it's that's don't didn't isn't aren't wasn't weren't can't couldn't should've they're there's here's kind like going gonna want actually thing things something anything everything make makes made get gets got one two first way well even ever every".split(/\s+/)
-  );
 
   function initialTranslationEngine() {
     try {
@@ -44,6 +41,7 @@
     urlField: document.getElementById("urlField"),
     urlError: document.getElementById("urlError"),
     projectTitle: document.getElementById("projectTitle"),
+    videoStage: document.getElementById("videoStage"),
     videoAmbient: document.getElementById("videoAmbient"),
     videoMount: document.getElementById("videoMount"),
     videoPlaceholder: document.getElementById("videoPlaceholder"),
@@ -93,6 +91,7 @@
     summaryOverview: document.getElementById("summaryOverview"),
     summaryTopics: document.getElementById("summaryTopics"),
     summaryPoints: document.getElementById("summaryPoints"),
+    summaryRetryButton: document.getElementById("summaryRetryButton"),
     dictionaryCard: document.getElementById("dictionaryCard"),
     dictionaryClose: document.getElementById("dictionaryClose"),
     dictionaryTerm: document.getElementById("dictionaryTerm"),
@@ -155,6 +154,9 @@
     phrasePointer: null,
     suppressWordClick: false,
     panelView: "transcript",
+    summaryController: null,
+    summaryLoading: false,
+    summaryTranscriptId: null,
   };
 
   let youTubeApiPromise = null;
@@ -228,6 +230,10 @@
     state.translationControllers.forEach((controller) => controller.abort());
     state.translationControllers.clear();
     state.translationActiveBatches = 0;
+    if (state.summaryController) state.summaryController.abort();
+    state.summaryController = null;
+    state.summaryLoading = false;
+    state.summaryTranscriptId = null;
     state.dictionaryCache.clear();
     state.phrasePointer = null;
     state.suppressWordClick = false;
@@ -240,6 +246,7 @@
     closeTuningPopovers();
     closeDictionary();
     setPanelView("transcript");
+    resetSummaryView();
     updateTranslationToggle();
 
     elements.landingView.classList.add("is-hidden");
@@ -332,7 +339,7 @@
     elements.workspaceView.setAttribute("aria-busy", "false");
     setInteractiveReady(true);
     renderTranscript("");
-    renderLocalSummary();
+    resetSummaryView();
     updatePlaybackUI(0, true);
 
     elements.extractTitle.textContent = "字幕已准备好。";
@@ -860,94 +867,109 @@
     resetTranslationObserver();
   }
 
-  function transcriptWords(text) {
-    return (String(text || "").toLowerCase().match(/[a-z][a-z'’-]{2,}/g) || [])
-      .map((word) => word.replace(/[’']/g, "'"))
-      .filter((word) => !SUMMARY_STOPWORDS.has(word));
-  }
-
-  function localSummaryData() {
-    const frequencies = new Map();
-    state.transcript.forEach((segment) => {
-      transcriptWords(segment.text).forEach((word) => {
-        frequencies.set(word, (frequencies.get(word) || 0) + 1);
-      });
-    });
-
-    const topics = Array.from(frequencies.entries())
-      .filter(([, count]) => count > 1 || state.transcript.length < 8)
-      .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
-      .slice(0, 6)
-      .map(([word]) => word);
-
-    const ranked = state.transcript.map((segment, index) => {
-      const words = transcriptWords(segment.text);
-      const uniqueWords = new Set(words);
-      const density = Array.from(uniqueWords).reduce(
-        (score, word) => score + Math.min(frequencies.get(word) || 0, 7),
-        0
-      ) / Math.sqrt(Math.max(words.length, 1));
-      const usefulLength = words.length >= 6 && words.length <= 34 ? 1 : 0.72;
-      const openingBoost = index < Math.max(2, state.transcript.length * 0.12) ? 1.12 : 1;
-      return { index, score: density * usefulLength * openingBoost };
-    }).sort((a, b) => b.score - a.score);
-
-    const pointCount = Math.min(5, Math.max(3, Math.ceil(state.transcript.length / 24)));
-    const selected = [];
-    ranked.forEach((candidate) => {
-      if (selected.length >= pointCount) return;
-      const tooClose = selected.some((item) => Math.abs(item.index - candidate.index) <= 1);
-      if (!tooClose) selected.push(candidate);
-    });
-    ranked.forEach((candidate) => {
-      if (selected.length >= pointCount) return;
-      if (!selected.some((item) => item.index === candidate.index)) selected.push(candidate);
-    });
-
-    return {
-      topics,
-      indices: selected.map((item) => item.index).sort((a, b) => a - b),
-    };
-  }
-
-  function renderLocalSummary() {
+  function resetSummaryView() {
+    elements.summaryView.classList.remove("is-loading", "has-error");
     elements.summaryTopics.replaceChildren();
     elements.summaryPoints.replaceChildren();
-    if (!state.transcript.length) {
-      elements.summaryOverview.textContent = "字幕准备完成后，这里会整理视频主题和关键内容。";
-      return;
-    }
+    elements.summaryTitle.textContent = "视频内容简介";
+    elements.summaryOverview.textContent = "打开此页面后，将使用已配置的模型 API 总结视频内容。";
+    elements.summaryRetryButton.classList.add("is-hidden");
+    elements.summaryRetryButton.textContent = "重新生成";
+  }
 
-    const summary = localSummaryData();
-    const topicText = summary.topics.length
-      ? summary.topics.slice(0, 4).map((topic) => `“${topic}”`).join("、")
-      : "视频中的核心表达";
-    elements.summaryTitle.textContent = "视频内容速览";
-    elements.summaryOverview.textContent = `这段视频主要围绕 ${topicText} 展开。下面按视频顺序列出最能代表主要内容的片段。`;
+  function renderAiSummary(summary) {
+    elements.summaryView.classList.remove("is-loading", "has-error");
+    elements.summaryTopics.replaceChildren();
+    elements.summaryPoints.replaceChildren();
+    elements.summaryRetryButton.classList.add("is-hidden");
+    elements.summaryTitle.textContent = summary.title || "视频内容速览";
+    elements.summaryOverview.textContent = summary.overview || "模型未返回视频概括。";
 
-    summary.topics.forEach((topic) => {
+    (summary.topics || []).forEach((topic) => {
       const chip = document.createElement("span");
       chip.textContent = topic;
       elements.summaryTopics.appendChild(chip);
     });
 
-    summary.indices.forEach((index, order) => {
+    (summary.points || []).forEach((item, order) => {
+      const index = state.transcript.findIndex((segment) => segment.id === item.segmentId);
+      if (index < 0) return;
       const segment = state.transcript[index];
       const point = document.createElement("button");
       point.type = "button";
       point.className = "summary-point";
       point.dataset.index = String(index);
-      point.setAttribute("aria-label", `从 ${formatTime(segment.start)} 播放：${segment.text}`);
+      point.setAttribute("aria-label", `从 ${formatTime(segment.start)} 播放：${item.heading}`);
 
       const meta = document.createElement("span");
       meta.className = "summary-point-meta";
-      meta.innerHTML = `<b>${String(order + 1).padStart(2, "0")}</b><i>${shortTime(segment.start)}</i>`;
+      const number = document.createElement("b");
+      number.textContent = String(order + 1).padStart(2, "0");
+      const time = document.createElement("i");
+      time.textContent = shortTime(segment.start);
+      meta.append(number, time);
       const copy = document.createElement("span");
       copy.className = "summary-point-copy";
-      copy.textContent = segment.text;
+      const heading = document.createElement("strong");
+      heading.textContent = item.heading;
+      const detail = document.createElement("span");
+      detail.textContent = item.text;
+      copy.append(heading, detail);
       point.append(meta, copy);
       elements.summaryPoints.appendChild(point);
     });
+  }
+
+  function showSummaryError(message) {
+    elements.summaryView.classList.remove("is-loading");
+    elements.summaryView.classList.add("has-error");
+    elements.summaryTopics.replaceChildren();
+    elements.summaryPoints.replaceChildren();
+    elements.summaryTitle.textContent = "暂时无法生成简介";
+    elements.summaryOverview.textContent = message;
+    elements.summaryRetryButton.classList.remove("is-hidden");
+  }
+
+  async function loadAiSummary() {
+    if (!state.interactiveReady || !state.transcriptId || state.summaryLoading) return;
+    if (state.summaryTranscriptId === state.transcriptId) return;
+    if (!state.languageAvailable) {
+      showSummaryError("请先在“翻译设置”中配置模型 API，然后重新生成内容简介。");
+      elements.summaryRetryButton.textContent = "配置 API";
+      return;
+    }
+
+    const controller = new AbortController();
+    state.summaryController = controller;
+    state.summaryLoading = true;
+    const token = state.loadToken;
+    const transcriptId = state.transcriptId;
+    elements.summaryView.classList.add("is-loading");
+    elements.summaryView.classList.remove("has-error");
+    elements.summaryRetryButton.classList.add("is-hidden");
+    elements.summaryRetryButton.textContent = "重新生成";
+    elements.summaryTitle.textContent = "正在总结视频…";
+    elements.summaryOverview.textContent = "正在使用翻译设置中的模型读取字幕并生成中文概括。";
+    elements.summaryTopics.replaceChildren();
+    elements.summaryPoints.replaceChildren();
+
+    try {
+      const response = await fetch("/api/summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcriptId, targetLanguage: "zh-CN" }),
+        signal: controller.signal,
+      });
+      const payload = await readApiPayload(response, "视频内容总结暂时不可用，请稍后重试。");
+      if (token !== state.loadToken || controller.signal.aborted || transcriptId !== state.transcriptId) return;
+      state.summaryTranscriptId = transcriptId;
+      renderAiSummary(payload.summary || {});
+    } catch (error) {
+      if (error.name !== "AbortError" && token === state.loadToken) showSummaryError(error.message);
+    } finally {
+      if (state.summaryController === controller) state.summaryController = null;
+      state.summaryLoading = false;
+    }
   }
 
   function setPanelView(view) {
@@ -963,7 +985,10 @@
     elements.summaryView.classList.toggle("is-hidden", !showSummary);
     elements.transcriptPanel.classList.toggle("is-summary", showSummary);
     elements.transcriptPanel.setAttribute("aria-label", showSummary ? "视频内容简介" : "逐句字幕");
-    if (showSummary) closeDictionary();
+    if (showSummary) {
+      closeDictionary();
+      loadAiSummary();
+    }
   }
 
   function appendLookupWords(container, text, lineIndex) {
@@ -1750,11 +1775,16 @@
     state.translationControllers.forEach((controller) => controller.abort());
     state.translationControllers.clear();
     state.translationActiveBatches = 0;
+    if (state.summaryController) state.summaryController.abort();
+    state.summaryController = null;
+    state.summaryLoading = false;
+    state.summaryTranscriptId = null;
     if (state.translationTimer) window.clearTimeout(state.translationTimer);
     state.translationTimer = null;
     if (state.translationObserver) state.translationObserver.disconnect();
     closeDictionary();
     setPanelView("transcript");
+    resetSummaryView();
     updateTranslationToggle();
     elements.videoMount.replaceChildren();
     elements.videoAmbient.style.backgroundImage = "";
@@ -1861,6 +1891,10 @@
   });
   elements.newVideoButton.addEventListener("click", returnHome);
   elements.playButton.addEventListener("click", togglePlay);
+  elements.videoStage.addEventListener("click", (event) => {
+    if (event.target.closest(".extract-overlay") || !state.interactiveReady) return;
+    togglePlay();
+  });
   elements.rewindButton.addEventListener("click", () => seekTo(state.currentTime - 5));
   elements.forwardButton.addEventListener("click", () => seekTo(state.currentTime + 5));
   elements.progressRange.addEventListener("input", (event) => seekTo(event.target.value));
@@ -1873,6 +1907,11 @@
   elements.translationToggle.addEventListener("click", toggleTranslations);
   elements.transcriptTab.addEventListener("click", () => setPanelView("transcript"));
   elements.summaryTab.addEventListener("click", () => setPanelView("summary"));
+  elements.summaryRetryButton.addEventListener("click", () => {
+    state.summaryTranscriptId = null;
+    if (state.languageAvailable) loadAiSummary();
+    else openAiSettings();
+  });
   elements.dictionaryClose.addEventListener("click", closeDictionary);
   elements.searchButton.addEventListener("click", toggleSearch);
   elements.transcriptSearch.addEventListener("input", (event) => renderTranscript(event.target.value));

@@ -9,8 +9,8 @@
     />
     <meta name="theme-color" content="#0d100e" />
     <title>VReply — 看懂，也说得出</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23151815'/%3E%3Ctext x='18' y='46' fill='%23f0ede6' font-size='42' font-family='Helvetica'%3EV%3C/text%3E%3Ccircle cx='53' cy='53' r='9' fill='%23cfd6cc'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="styles.css?v=20260712-focus-workspace" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23151815'/%3E%3Ctext x='18' y='46' fill='%23f0ede6' font-size='42' font-family='Helvetica'%3EV%3C/text%3E%3Ccircle cx='53' cy='53' r='9' fill='%23b9df72'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="styles.css?v=20260712-ai-summary" />
   </head>
   <body>
     <div class="page-noise" aria-hidden="true"></div>
@@ -23,6 +23,10 @@
         </span>
         <span class="brand-name">VReply</span>
       </button>
+
+      <div class="workspace-heading">
+        <h1 id="projectTitle">日常英语练习</h1>
+      </div>
 
       <div class="header-actions">
         <button class="quiet-button is-hidden" id="aiSettingsButton" type="button">
@@ -110,13 +114,6 @@
       </section>
 
       <section class="workspace-view is-hidden" id="workspaceView" aria-label="口语练习区">
-        <div class="project-bar">
-          <div class="project-identity">
-            <span class="project-label">本次练习</span>
-            <h1 id="projectTitle">日常英语练习</h1>
-          </div>
-        </div>
-
         <div class="practice-grid">
           <section class="video-panel" aria-label="视频播放器">
             <div class="video-stage" id="videoStage">
@@ -207,11 +204,18 @@
           <aside class="transcript-panel" id="transcriptPanel" aria-label="逐句字幕">
             <header class="transcript-header">
               <div class="panel-tabs" role="tablist" aria-label="字幕内容">
-                <button class="panel-tab is-active" id="transcriptTab" type="button" role="tab" aria-selected="true" aria-controls="transcriptScroll">
-                  逐句字幕 <small id="transcriptCount">0</small>
+                <button class="panel-tab is-active" id="transcriptTab" type="button" role="tab" aria-label="逐句字幕" aria-selected="true" aria-controls="transcriptScroll" data-tooltip="逐句字幕">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 6h14M5 12h14M5 18h9" />
+                    <circle cx="3" cy="6" r=".7" /><circle cx="3" cy="12" r=".7" /><circle cx="3" cy="18" r=".7" />
+                  </svg>
+                  <small id="transcriptCount">0</small>
                 </button>
-                <button class="panel-tab" id="summaryTab" type="button" role="tab" aria-selected="false" aria-controls="summaryView">
-                  内容简介
+                <button class="panel-tab" id="summaryTab" type="button" role="tab" aria-label="内容简介" aria-selected="false" aria-controls="summaryView" data-tooltip="内容简介">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M6 4h9l3 3v13H6zM9 11h6M9 15h5" />
+                    <path class="summary-spark" d="m18.5 2 .5 1.5L20.5 4 19 4.5 18.5 6 18 4.5 16.5 4 18 3.5z" />
+                  </svg>
                 </button>
               </div>
               <div class="transcript-actions">
@@ -278,13 +282,14 @@
 
             <section class="summary-view is-hidden" id="summaryView" role="tabpanel" aria-labelledby="summaryTab" tabindex="0">
               <div class="summary-intro">
-                <span class="summary-kicker">无需 API · 本地提炼</span>
+                <span class="summary-kicker">AI 总结 · 使用翻译设置</span>
                 <h2 id="summaryTitle">视频内容简介</h2>
-                <p id="summaryOverview">字幕准备完成后，这里会整理视频主题和关键内容。</p>
+                <p id="summaryOverview">打开此页面后，将使用已配置的模型 API 总结视频内容。</p>
+                <button class="summary-retry is-hidden" id="summaryRetryButton" type="button">重新生成</button>
               </div>
               <div class="summary-topics" id="summaryTopics" aria-label="主要话题"></div>
               <div class="summary-points" id="summaryPoints"></div>
-              <p class="summary-disclaimer">内容由字幕中的高信息量句子提炼，适合快速预览；它不会上传字幕，也不会调用外部总结服务。</p>
+              <p class="summary-disclaimer">内容由翻译设置中的模型根据视频字幕生成。字幕会发送至你配置的 API 服务。</p>
             </section>
 
           </aside>
@@ -367,6 +372,6 @@
     <script>
       window.VREPLY_TRANSCRIBE_ENDPOINT = "/api/transcribe";
     </script>
-    <script src="app.js?v=20260712-focus-workspace"></script>
+    <script src="app.js?v=20260712-ai-summary"></script>
   </body>
 </html>
