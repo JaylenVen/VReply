@@ -9,14 +9,8 @@
     />
     <meta name="theme-color" content="#0d100e" />
     <title>VReply — 看懂，也说得出</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23151815'/%3E%3Ctext x='18' y='46' fill='%23f0ede6' font-size='42' font-family='Georgia' font-style='italic'%3EV%3C/text%3E%3Ccircle cx='53' cy='53' r='9' fill='%23d6ff52'/%3E%3C/svg%3E" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Sans:wdth,wght@75..100,400..700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="styles.css?v=20260712-dark-studio" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23151815'/%3E%3Ctext x='18' y='46' fill='%23f0ede6' font-size='42' font-family='Helvetica'%3EV%3C/text%3E%3Ccircle cx='53' cy='53' r='9' fill='%23cfd6cc'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="styles.css?v=20260712-focus-workspace" />
   </head>
   <body>
     <div class="page-noise" aria-hidden="true"></div>
@@ -118,6 +112,7 @@
       <section class="workspace-view is-hidden" id="workspaceView" aria-label="口语练习区">
         <div class="project-bar">
           <div class="project-identity">
+            <span class="project-label">本次练习</span>
             <h1 id="projectTitle">日常英语练习</h1>
           </div>
         </div>
@@ -147,7 +142,6 @@
             </div>
 
             <div class="caption-overlay" id="captionOverlay" aria-live="polite" aria-label="当前双语字幕">
-              <span class="caption-kicker">正在播放</span>
               <div class="caption-copy">
                 <p id="captionText">当前句子会显示在这里。</p>
                 <p class="caption-translation" id="captionTranslation">译文将在开启翻译后显示</p>
@@ -155,60 +149,70 @@
             </div>
 
             <div class="player-controls">
-              <button class="control-button" id="rewindButton" type="button" aria-label="后退 5 秒">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8H5V4M5.2 8.2a8 8 0 1 1-1 6.8" /><text x="10.2" y="15.3">5</text></svg>
-              </button>
-              <button class="play-button" id="playButton" type="button" aria-label="播放视频">
-                <svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7 8 5-8 5V7Z" /></svg>
-                <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7v10M15 7v10" /></svg>
-              </button>
-              <button class="control-button" id="forwardButton" type="button" aria-label="前进 5 秒">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 8h4V4m-.2 4.2a8 8 0 1 0 1 6.8" /><text x="7.3" y="15.3">5</text></svg>
-              </button>
+              <div class="transport-group" aria-label="播放控制">
+                <button class="control-button" id="rewindButton" type="button" aria-label="后退 5 秒">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8H5V4M5.2 8.2a8 8 0 1 1-1 6.8" /><text x="10.2" y="15.3">5</text></svg>
+                </button>
+                <button class="play-button" id="playButton" type="button" aria-label="播放视频">
+                  <svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7 8 5-8 5V7Z" /></svg>
+                  <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7v10M15 7v10" /></svg>
+                </button>
+                <button class="control-button" id="forwardButton" type="button" aria-label="前进 5 秒">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 8h4V4m-.2 4.2a8 8 0 1 0 1 6.8" /><text x="7.3" y="15.3">5</text></svg>
+                </button>
+              </div>
 
               <button class="loop-button" id="loopButton" type="button" aria-pressed="false" title="循环当前句">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a4 4 0 0 1 4 4M17 4l3 3-3 3M17 17H7a4 4 0 0 1-4-4M7 20l-3-3 3-3" /></svg>
                 <span>单句循环</span>
               </button>
 
-              <span class="time-readout"><b id="currentTime">00:00</b><i>/</i><span id="durationTime">02:30</span></span>
-
-              <label class="progress-control" aria-label="播放进度">
-                <input id="progressRange" type="range" min="0" max="150" step="0.1" value="0" />
-                <span class="progress-track"><i id="progressFill"></i></span>
-              </label>
-
-              <div class="tuning-menu speed-control">
-                <button class="tuning-trigger" id="speedButton" type="button" aria-expanded="false" aria-controls="speedPopover" aria-label="调节播放速度">
-                  <span>倍速</span><b id="speedButtonValue">1×</b>
-                </button>
-                <div class="tuning-popover is-hidden" id="speedPopover" role="group" aria-label="倍速调节">
-                  <label class="tuning-control">
-                    <span class="tuning-heading"><span>播放速度</span><output id="speedValue" for="speedRange">1×</output></span>
-                    <input id="speedRange" type="range" min="0" max="7" step="1" value="2" aria-label="播放速度" aria-valuetext="1×" />
-                  </label>
-                </div>
+              <div class="timeline-group">
+                <span class="time-readout"><b id="currentTime">00:00</b><i>/</i><span id="durationTime">02:30</span></span>
+                <label class="progress-control" aria-label="播放进度">
+                  <input id="progressRange" type="range" min="0" max="150" step="0.1" value="0" />
+                  <span class="progress-track"><i id="progressFill"></i></span>
+                </label>
               </div>
 
-              <div class="tuning-menu volume-control">
-                <button class="tuning-trigger" id="volumeButton" type="button" aria-expanded="false" aria-controls="volumePopover" aria-label="调节音量">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l4 3V7l-4 3H4ZM15 9.5a4 4 0 0 1 0 5M17.5 7a7.5 7.5 0 0 1 0 10" /></svg>
-                  <span>音量</span>
-                </button>
-                <div class="tuning-popover is-hidden" id="volumePopover" role="group" aria-label="音量调节">
-                  <label class="tuning-control">
-                    <span class="tuning-heading"><span>播放音量</span><output id="volumeValue" for="volumeRange">100%</output></span>
-                    <input id="volumeRange" type="range" min="0" max="100" step="1" value="100" aria-label="播放音量" />
-                  </label>
+              <div class="settings-group">
+                <div class="tuning-menu speed-control">
+                  <button class="tuning-trigger" id="speedButton" type="button" aria-expanded="false" aria-controls="speedPopover" aria-label="调节播放速度">
+                    <span>倍速</span><b id="speedButtonValue">1×</b>
+                  </button>
+                  <div class="tuning-popover is-hidden" id="speedPopover" role="group" aria-label="倍速调节">
+                    <label class="tuning-control">
+                      <span class="tuning-heading"><span>播放速度</span><output id="speedValue" for="speedRange">1×</output></span>
+                      <input id="speedRange" type="range" min="0" max="7" step="1" value="2" aria-label="播放速度" aria-valuetext="1×" />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="tuning-menu volume-control">
+                  <button class="tuning-trigger" id="volumeButton" type="button" aria-expanded="false" aria-controls="volumePopover" aria-label="调节音量">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l4 3V7l-4 3H4ZM15 9.5a4 4 0 0 1 0 5M17.5 7a7.5 7.5 0 0 1 0 10" /></svg>
+                    <span>音量</span>
+                  </button>
+                  <div class="tuning-popover is-hidden" id="volumePopover" role="group" aria-label="音量调节">
+                    <label class="tuning-control">
+                      <span class="tuning-heading"><span>播放音量</span><output id="volumeValue" for="volumeRange">100%</output></span>
+                      <input id="volumeRange" type="range" min="0" max="100" step="1" value="100" aria-label="播放音量" />
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
           </section>
 
-          <aside class="transcript-panel" aria-label="逐句字幕">
+          <aside class="transcript-panel" id="transcriptPanel" aria-label="逐句字幕">
             <header class="transcript-header">
-              <div>
-                <h2>逐句字幕 <small id="transcriptCount">0</small></h2>
+              <div class="panel-tabs" role="tablist" aria-label="字幕内容">
+                <button class="panel-tab is-active" id="transcriptTab" type="button" role="tab" aria-selected="true" aria-controls="transcriptScroll">
+                  逐句字幕 <small id="transcriptCount">0</small>
+                </button>
+                <button class="panel-tab" id="summaryTab" type="button" role="tab" aria-selected="false" aria-controls="summaryView">
+                  内容简介
+                </button>
               </div>
               <div class="transcript-actions">
                 <button class="follow-toggle is-active" id="followToggle" type="button" aria-label="自动跟随字幕" aria-pressed="true" title="自动跟随字幕">
@@ -216,9 +220,9 @@
                   <b>跟随</b>
                 </button>
                 <button class="translation-toggle" id="translationToggle" type="button" aria-pressed="false" aria-describedby="languageStatus" disabled>
-                  <span aria-hidden="true">译</span>
+                  <span aria-hidden="true"><i></i></span>
                   <b>译文</b>
-                  <small class="is-hidden" id="translationProgress" aria-live="polite">0%</small>
+                  <small class="sr-only" id="translationProgress" aria-live="polite"></small>
                 </button>
                 <span class="sr-only" id="languageStatus" aria-live="polite"></span>
                 <button class="icon-button" id="searchButton" type="button" aria-label="搜索字幕">
@@ -258,7 +262,7 @@
               </div>
             </section>
 
-            <div class="transcript-scroll" id="transcriptScroll" tabindex="0">
+            <div class="transcript-scroll" id="transcriptScroll" role="tabpanel" aria-labelledby="transcriptTab" tabindex="0">
               <div class="transcript-skeleton" id="transcriptSkeleton" aria-hidden="true">
                 <div><i></i><span></span></div>
                 <div><i></i><span></span></div>
@@ -271,6 +275,17 @@
                 换个关键词试试。
               </div>
             </div>
+
+            <section class="summary-view is-hidden" id="summaryView" role="tabpanel" aria-labelledby="summaryTab" tabindex="0">
+              <div class="summary-intro">
+                <span class="summary-kicker">无需 API · 本地提炼</span>
+                <h2 id="summaryTitle">视频内容简介</h2>
+                <p id="summaryOverview">字幕准备完成后，这里会整理视频主题和关键内容。</p>
+              </div>
+              <div class="summary-topics" id="summaryTopics" aria-label="主要话题"></div>
+              <div class="summary-points" id="summaryPoints"></div>
+              <p class="summary-disclaimer">内容由字幕中的高信息量句子提炼，适合快速预览；它不会上传字幕，也不会调用外部总结服务。</p>
+            </section>
 
           </aside>
         </div>
@@ -352,6 +367,6 @@
     <script>
       window.VREPLY_TRANSCRIBE_ENDPOINT = "/api/transcribe";
     </script>
-    <script src="app.js?v=20260712-dark-studio"></script>
+    <script src="app.js?v=20260712-focus-workspace"></script>
   </body>
 </html>

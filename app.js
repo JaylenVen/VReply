@@ -4,6 +4,9 @@
   const DEFAULT_DURATION = 150;
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3];
   const TRANSLATION_ENGINE_KEY = "vreply:translation-engine";
+  const SUMMARY_STOPWORDS = new Set(
+    "about after again against all also and any are because been before being between both but can could did does doing down each few for from further had has have having here how into its itself just more most much must not now off once only other our out over own really said same should some such than that the their them then there these they this those through too under very was were what when where which while who why will with would you your we we're i'm it's that's don't didn't isn't aren't wasn't weren't can't couldn't should've they're there's here's kind like going gonna want actually thing things something anything everything make makes made get gets got one two first way well even ever every".split(/\s+/)
+  );
 
   function initialTranslationEngine() {
     try {
@@ -68,6 +71,7 @@
     volumeRange: document.getElementById("volumeRange"),
     volumeValue: document.getElementById("volumeValue"),
     loopButton: document.getElementById("loopButton"),
+    transcriptPanel: document.getElementById("transcriptPanel"),
     transcriptCount: document.getElementById("transcriptCount"),
     transcriptScroll: document.getElementById("transcriptScroll"),
     transcriptSkeleton: document.getElementById("transcriptSkeleton"),
@@ -82,6 +86,13 @@
     translationToggle: document.getElementById("translationToggle"),
     translationProgress: document.getElementById("translationProgress"),
     languageStatus: document.getElementById("languageStatus"),
+    transcriptTab: document.getElementById("transcriptTab"),
+    summaryTab: document.getElementById("summaryTab"),
+    summaryView: document.getElementById("summaryView"),
+    summaryTitle: document.getElementById("summaryTitle"),
+    summaryOverview: document.getElementById("summaryOverview"),
+    summaryTopics: document.getElementById("summaryTopics"),
+    summaryPoints: document.getElementById("summaryPoints"),
     dictionaryCard: document.getElementById("dictionaryCard"),
     dictionaryClose: document.getElementById("dictionaryClose"),
     dictionaryTerm: document.getElementById("dictionaryTerm"),
@@ -143,6 +154,7 @@
     dictionaryRequestId: 0,
     phrasePointer: null,
     suppressWordClick: false,
+    panelView: "transcript",
   };
 
   let youTubeApiPromise = null;
@@ -198,6 +210,7 @@
     }
 
     clearFieldError();
+    document.body.classList.add("workspace-active");
     const token = ++state.loadToken;
     state.source = source;
     state.transcript = [];
@@ -226,6 +239,7 @@
     cleanupPlayer();
     closeTuningPopovers();
     closeDictionary();
+    setPanelView("transcript");
     updateTranslationToggle();
 
     elements.landingView.classList.add("is-hidden");
@@ -239,7 +253,9 @@
     elements.searchRow.classList.add("is-hidden");
     elements.searchResultCount.textContent = "0";
     elements.captionOverlay.classList.remove("is-visible");
+    elements.captionOverlay.classList.remove("has-translation");
     elements.captionText.textContent = "当前句子会显示在这里。";
+    elements.captionText.classList.remove("is-long", "is-very-long");
     elements.captionTranslation.textContent = "译文将在开启翻译后显示";
     elements.captionTranslation.classList.remove("is-loading", "has-error");
     elements.extractOverlay.classList.remove("is-complete");
@@ -316,6 +332,7 @@
     elements.workspaceView.setAttribute("aria-busy", "false");
     setInteractiveReady(true);
     renderTranscript("");
+    renderLocalSummary();
     updatePlaybackUI(0, true);
 
     elements.extractTitle.textContent = "字幕已准备好。";
@@ -422,6 +439,8 @@
       elements.volumeRange,
       elements.loopButton,
       elements.followToggle,
+      elements.transcriptTab,
+      elements.summaryTab,
       elements.searchButton,
       elements.downloadButton,
     ].forEach((control) => {
@@ -720,6 +739,7 @@
       state.activeIndex = -1;
       state.lastCaptionWord = -1;
       elements.captionOverlay.classList.remove("is-visible");
+      elements.captionOverlay.classList.remove("has-translation");
       elements.captionTranslation.textContent = "译文将在开启翻译后显示";
       elements.captionTranslation.classList.remove("is-loading", "has-error");
       return;
@@ -744,6 +764,9 @@
 
   function renderCaptionWords(segment) {
     elements.captionText.replaceChildren();
+    const captionLength = String(segment.text || "").length;
+    elements.captionText.classList.toggle("is-long", captionLength > 105);
+    elements.captionText.classList.toggle("is-very-long", captionLength > 165);
     const fallbackTokens = String(segment.text).split(/\s+/).filter(Boolean);
     const duration = segment.end - segment.start;
     const words = segment.words.length === fallbackTokens.length
@@ -835,6 +858,112 @@
     elements.searchResultCount.textContent = String(resultCount);
     elements.transcriptEmpty.classList.toggle("is-hidden", resultCount > 0);
     resetTranslationObserver();
+  }
+
+  function transcriptWords(text) {
+    return (String(text || "").toLowerCase().match(/[a-z][a-z'’-]{2,}/g) || [])
+      .map((word) => word.replace(/[’']/g, "'"))
+      .filter((word) => !SUMMARY_STOPWORDS.has(word));
+  }
+
+  function localSummaryData() {
+    const frequencies = new Map();
+    state.transcript.forEach((segment) => {
+      transcriptWords(segment.text).forEach((word) => {
+        frequencies.set(word, (frequencies.get(word) || 0) + 1);
+      });
+    });
+
+    const topics = Array.from(frequencies.entries())
+      .filter(([, count]) => count > 1 || state.transcript.length < 8)
+      .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
+      .slice(0, 6)
+      .map(([word]) => word);
+
+    const ranked = state.transcript.map((segment, index) => {
+      const words = transcriptWords(segment.text);
+      const uniqueWords = new Set(words);
+      const density = Array.from(uniqueWords).reduce(
+        (score, word) => score + Math.min(frequencies.get(word) || 0, 7),
+        0
+      ) / Math.sqrt(Math.max(words.length, 1));
+      const usefulLength = words.length >= 6 && words.length <= 34 ? 1 : 0.72;
+      const openingBoost = index < Math.max(2, state.transcript.length * 0.12) ? 1.12 : 1;
+      return { index, score: density * usefulLength * openingBoost };
+    }).sort((a, b) => b.score - a.score);
+
+    const pointCount = Math.min(5, Math.max(3, Math.ceil(state.transcript.length / 24)));
+    const selected = [];
+    ranked.forEach((candidate) => {
+      if (selected.length >= pointCount) return;
+      const tooClose = selected.some((item) => Math.abs(item.index - candidate.index) <= 1);
+      if (!tooClose) selected.push(candidate);
+    });
+    ranked.forEach((candidate) => {
+      if (selected.length >= pointCount) return;
+      if (!selected.some((item) => item.index === candidate.index)) selected.push(candidate);
+    });
+
+    return {
+      topics,
+      indices: selected.map((item) => item.index).sort((a, b) => a - b),
+    };
+  }
+
+  function renderLocalSummary() {
+    elements.summaryTopics.replaceChildren();
+    elements.summaryPoints.replaceChildren();
+    if (!state.transcript.length) {
+      elements.summaryOverview.textContent = "字幕准备完成后，这里会整理视频主题和关键内容。";
+      return;
+    }
+
+    const summary = localSummaryData();
+    const topicText = summary.topics.length
+      ? summary.topics.slice(0, 4).map((topic) => `“${topic}”`).join("、")
+      : "视频中的核心表达";
+    elements.summaryTitle.textContent = "视频内容速览";
+    elements.summaryOverview.textContent = `这段视频主要围绕 ${topicText} 展开。下面按视频顺序列出最能代表主要内容的片段。`;
+
+    summary.topics.forEach((topic) => {
+      const chip = document.createElement("span");
+      chip.textContent = topic;
+      elements.summaryTopics.appendChild(chip);
+    });
+
+    summary.indices.forEach((index, order) => {
+      const segment = state.transcript[index];
+      const point = document.createElement("button");
+      point.type = "button";
+      point.className = "summary-point";
+      point.dataset.index = String(index);
+      point.setAttribute("aria-label", `从 ${formatTime(segment.start)} 播放：${segment.text}`);
+
+      const meta = document.createElement("span");
+      meta.className = "summary-point-meta";
+      meta.innerHTML = `<b>${String(order + 1).padStart(2, "0")}</b><i>${shortTime(segment.start)}</i>`;
+      const copy = document.createElement("span");
+      copy.className = "summary-point-copy";
+      copy.textContent = segment.text;
+      point.append(meta, copy);
+      elements.summaryPoints.appendChild(point);
+    });
+  }
+
+  function setPanelView(view) {
+    const showSummary = view === "summary";
+    state.panelView = showSummary ? "summary" : "transcript";
+    elements.transcriptTab.classList.toggle("is-active", !showSummary);
+    elements.summaryTab.classList.toggle("is-active", showSummary);
+    elements.transcriptTab.setAttribute("aria-selected", String(!showSummary));
+    elements.summaryTab.setAttribute("aria-selected", String(showSummary));
+    elements.transcriptTab.tabIndex = showSummary ? -1 : 0;
+    elements.summaryTab.tabIndex = showSummary ? 0 : -1;
+    elements.transcriptScroll.classList.toggle("is-hidden", showSummary);
+    elements.summaryView.classList.toggle("is-hidden", !showSummary);
+    elements.transcriptPanel.classList.toggle("is-summary", showSummary);
+    elements.transcriptPanel.setAttribute("aria-label", showSummary ? "视频内容简介" : "逐句字幕");
+    if (showSummary) closeDictionary();
   }
 
   function appendLookupWords(container, text, lineIndex) {
@@ -930,11 +1059,10 @@
     const total = state.transcript.length;
     const finished = Math.min(total, state.translations.size + state.translationErrors.size);
     const percent = total ? Math.round((finished / total) * 100) : 0;
-    const visible = state.showTranslations && total > 0;
-    elements.translationProgress.textContent = `${percent}%`;
-    elements.translationProgress.classList.toggle("is-hidden", !visible);
-    elements.translationToggle.style.setProperty("--translation-progress", `${percent}%`);
-    if (visible) {
+    const translating = state.showTranslations && total > 0 && finished < total;
+    elements.translationProgress.textContent = translating ? `字幕翻译进度 ${percent}%` : "";
+    elements.translationToggle.classList.toggle("is-translating", translating);
+    if (translating) {
       const failed = state.translationErrors.size;
       elements.translationToggle.setAttribute(
         "aria-label",
@@ -943,7 +1071,10 @@
           : `整篇字幕翻译进度 ${percent}%`
       );
     } else {
-      elements.translationToggle.removeAttribute("aria-label");
+      elements.translationToggle.setAttribute(
+        "aria-label",
+        state.showTranslations ? "隐藏全部字幕译文" : "显示全部字幕译文"
+      );
     }
   }
 
@@ -983,9 +1114,11 @@
   }
 
   function updateCaptionTranslation(index) {
+    const visible = state.showTranslations || state.revealedTranslations.has(index);
     const translation = state.translations.get(index);
     const error = state.translationErrors.get(index);
     const loading = state.translationQueue.has(index) || state.translationInFlight.has(index);
+    elements.captionOverlay.classList.toggle("has-translation", visible);
     elements.captionTranslation.classList.toggle("is-loading", loading);
     elements.captionTranslation.classList.toggle("has-error", Boolean(error));
     if (translation) elements.captionTranslation.textContent = translation.text;
@@ -1136,6 +1269,7 @@
     if (state.showTranslations) {
       state.transcript.forEach((_segment, index) => queueTranslation(index));
     }
+    if (state.activeIndex >= 0) updateCaptionTranslation(state.activeIndex);
   }
 
   function queueTranslation(index) {
@@ -1600,6 +1734,7 @@
     setPlaying(false);
     cleanupPlayer();
     closeTuningPopovers();
+    document.body.classList.remove("workspace-active");
     state.source = null;
     state.transcript = [];
     state.transcriptId = null;
@@ -1619,6 +1754,7 @@
     state.translationTimer = null;
     if (state.translationObserver) state.translationObserver.disconnect();
     closeDictionary();
+    setPanelView("transcript");
     updateTranslationToggle();
     elements.videoMount.replaceChildren();
     elements.videoAmbient.style.backgroundImage = "";
@@ -1631,7 +1767,9 @@
     elements.searchRow.classList.add("is-hidden");
     elements.searchResultCount.textContent = "0";
     elements.captionOverlay.classList.remove("is-visible");
+    elements.captionOverlay.classList.remove("has-translation");
     elements.captionText.textContent = "当前句子会显示在这里。";
+    elements.captionText.classList.remove("is-long", "is-very-long");
     elements.captionTranslation.textContent = "译文将在开启翻译后显示";
     elements.captionTranslation.classList.remove("is-loading", "has-error");
     clearFieldError();
@@ -1733,10 +1871,18 @@
   elements.loopButton.addEventListener("click", toggleLoop);
   elements.followToggle.addEventListener("click", toggleAutoFollow);
   elements.translationToggle.addEventListener("click", toggleTranslations);
+  elements.transcriptTab.addEventListener("click", () => setPanelView("transcript"));
+  elements.summaryTab.addEventListener("click", () => setPanelView("summary"));
   elements.dictionaryClose.addEventListener("click", closeDictionary);
   elements.searchButton.addEventListener("click", toggleSearch);
   elements.transcriptSearch.addEventListener("input", (event) => renderTranscript(event.target.value));
   elements.downloadButton.addEventListener("click", downloadTranscript);
+  elements.summaryPoints.addEventListener("click", (event) => {
+    const point = event.target.closest(".summary-point");
+    if (!point) return;
+    const segment = state.transcript[Number(point.dataset.index)];
+    if (segment) seekTo(segment.start, { play: true });
+  });
 
   elements.transcriptList.addEventListener("pointerdown", (event) => {
     const word = event.target.closest(".line-word");
