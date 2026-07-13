@@ -72,6 +72,7 @@
     durationTime: document.getElementById("durationTime"),
     progressRange: document.getElementById("progressRange"),
     progressFill: document.getElementById("progressFill"),
+    progressTooltip: document.getElementById("progressTooltip"),
     speedButton: document.getElementById("speedButton"),
     speedButtonValue: document.getElementById("speedButtonValue"),
     speedPopover: document.getElementById("speedPopover"),
@@ -137,6 +138,13 @@
     dictionarySynonyms: document.getElementById("dictionarySynonyms"),
     dictionaryWordFamilyBlock: document.getElementById("dictionaryWordFamilyBlock"),
     dictionaryWordFamily: document.getElementById("dictionaryWordFamily"),
+    wordPreview: document.getElementById("wordPreview"),
+    wordPreviewTerm: document.getElementById("wordPreviewTerm"),
+    wordPreviewMeta: document.getElementById("wordPreviewMeta"),
+    wordPreviewPronunciationUS: document.getElementById("wordPreviewPronunciationUS"),
+    wordPreviewPronunciationUK: document.getElementById("wordPreviewPronunciationUK"),
+    wordPreviewSenses: document.getElementById("wordPreviewSenses"),
+    wordPreviewForms: document.getElementById("wordPreviewForms"),
     toast: document.getElementById("toast"),
     toastTitle: document.getElementById("toastTitle"),
     toastText: document.getElementById("toastText"),
@@ -184,8 +192,13 @@
     translationActiveBatches: 0,
     translationObserver: null,
     dictionaryCache: new Map(),
+    localDictionaryCache: new Map(),
     dictionaryController: null,
     dictionaryRequestId: 0,
+    wordPreviewTimer: null,
+    wordPreviewController: null,
+    wordPreviewTarget: null,
+    timelineHovering: false,
     studyOverlay: null,
     resumeAfterStudy: false,
     analysisCache: new Map(),
@@ -808,11 +821,27 @@
     elements.progressRange.max = String(duration);
     elements.progressRange.value = String(Math.min(time, duration));
     elements.progressFill.style.width = `${progress}%`;
+    if (!state.timelineHovering) updateProgressTooltip(time, progress);
 
     if (!state.transcript.length) return;
     const nextIndex = findActiveSegment(time);
     if (force || nextIndex !== state.activeIndex) setActiveSegment(nextIndex);
     updateCaptionWord(time);
+  }
+
+  function updateProgressTooltip(time, progress) {
+    const percent = Number.isFinite(progress)
+      ? progress
+      : Math.max(0, Math.min(100, ((Number(time) || 0) / Math.max(0.1, state.duration || 0.1)) * 100));
+    elements.progressTooltip.textContent = formatTime(time);
+    elements.progressTooltip.style.left = `${percent}%`;
+  }
+
+  function previewTimelineAt(clientX) {
+    const rect = elements.progressRange.getBoundingClientRect();
+    if (!rect.width) return;
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    updateProgressTooltip(ratio * Math.max(0, state.duration || 0), ratio * 100);
   }
 
   function findActiveSegment(time) {
@@ -828,6 +857,7 @@
     if (index !== state.activeIndex && !elements.analysisCard.classList.contains("is-hidden")) {
       closeSentenceAnalysis();
     }
+    const changed = index !== state.activeIndex;
     const previous = elements.transcriptList.querySelector(".transcript-item.is-active");
     if (previous) {
       previous.classList.remove("is-active");
@@ -850,6 +880,10 @@
     if (item) {
       item.classList.add("is-active");
       item.setAttribute("aria-current", "true");
+      if (changed) {
+        item.classList.add("is-entering");
+        item.addEventListener("animationend", () => item.classList.remove("is-entering"), { once: true });
+      }
       if (state.autoFollow && !elements.transcriptSearch.value.trim()) {
         item.scrollIntoView({ behavior: "smooth", block: "center" });
       }
@@ -1662,6 +1696,7 @@
   }
 
   function openDictionary(selection) {
+    hideWordPreview();
     if (!elements.analysisCard.classList.contains("is-hidden")) {
       closeSentenceAnalysis({ preserveStudySession: true });
     }
@@ -1676,14 +1711,17 @@
     elements.dictionaryStatus.classList.add("sr-only");
     elements.dictionaryStatus.classList.remove("is-error");
     elements.dictionaryContent.classList.add("is-hidden");
+    elements.dictionaryCard.classList.remove("is-enriching");
   }
 
   function closeDictionary(options) {
+    hideWordPreview();
     state.dictionaryRequestId += 1;
     elements.dictionaryCard.classList.add("is-hidden");
     elements.dictionaryCard.removeAttribute("aria-busy");
     if (state.dictionaryController) state.dictionaryController.abort();
     state.dictionaryController = null;
+    elements.dictionaryCard.classList.remove("is-enriching");
     const selection = window.getSelection();
     if (selection && !selection.isCollapsed) selection.removeAllRanges();
     endStudyOverlay("dictionary", options);
@@ -1691,6 +1729,7 @@
 
   function showDictionaryError(message) {
     elements.dictionaryCard.setAttribute("aria-busy", "false");
+    elements.dictionaryCard.classList.remove("is-enriching");
     elements.dictionaryLoading.classList.add("is-hidden");
     elements.dictionaryStatus.textContent = message;
     elements.dictionaryStatus.classList.remove("sr-only");
@@ -1748,9 +1787,13 @@
     return items.length > 0;
   }
 
-  function renderDictionaryEntry(entry) {
+  function renderDictionaryEntry(entry, options) {
+    const config = options || {};
     elements.dictionaryTerm.textContent = entry.headword || entry.selection;
-    elements.dictionaryMeta.textContent = entry.partOfSpeech || "";
+    const meta = entry.partOfSpeech || "";
+    elements.dictionaryMeta.textContent = config.enriching
+      ? `${meta}${meta ? " · " : ""}本地释义已就绪，AI 正在补充`
+      : meta;
     const fallbackPronunciation = entry.pronunciation || "";
     elements.dictionaryPronunciationUS.textContent = entry.pronunciationUS || fallbackPronunciation;
     elements.dictionaryPronunciationUK.textContent = entry.pronunciationUK || fallbackPronunciation;
@@ -1789,7 +1832,125 @@
     elements.dictionaryStatus.classList.remove("is-error");
     elements.dictionaryLoading.classList.add("is-hidden");
     elements.dictionaryContent.classList.remove("is-hidden");
-    elements.dictionaryCard.setAttribute("aria-busy", "false");
+    elements.dictionaryCard.classList.toggle("is-enriching", Boolean(config.enriching));
+    elements.dictionaryCard.setAttribute("aria-busy", config.enriching ? "true" : "false");
+  }
+
+  async function fetchLocalDefinition(selection, index, signal) {
+    const cacheKey = selection.toLocaleLowerCase();
+    const cached = state.localDictionaryCache.get(cacheKey);
+    if (cached) return cached;
+
+    const response = await fetch("/api/dictionary", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        transcriptId: state.transcriptId,
+        segmentId: state.transcript[index].id,
+        selection,
+        targetLanguage: "zh-CN",
+        localOnly: true,
+      }),
+      signal,
+    });
+    const payload = await readApiPayload(response, "本地词典暂时不可用。");
+    const entry = payload.entry || {};
+    state.localDictionaryCache.set(cacheKey, entry);
+    return entry;
+  }
+
+  function hideWordPreview() {
+    if (state.wordPreviewTimer) window.clearTimeout(state.wordPreviewTimer);
+    state.wordPreviewTimer = null;
+    if (state.wordPreviewController) state.wordPreviewController.abort();
+    state.wordPreviewController = null;
+    if (state.wordPreviewTarget) state.wordPreviewTarget.removeAttribute("aria-describedby");
+    state.wordPreviewTarget = null;
+    elements.wordPreview.classList.add("is-hidden");
+  }
+
+  function positionWordPreview(target) {
+    const targetRect = target.getBoundingClientRect();
+    const previewRect = elements.wordPreview.getBoundingClientRect();
+    const margin = 12;
+    const gap = 12;
+    if (target.classList.contains("caption-word")) {
+      let left = Math.max(margin, Math.min(targetRect.left, window.innerWidth - previewRect.width - margin));
+      let top = targetRect.top - previewRect.height - gap;
+      if (top < margin) top = targetRect.bottom + gap;
+      top = Math.max(margin, Math.min(top, window.innerHeight - previewRect.height - margin));
+      elements.wordPreview.style.left = `${left}px`;
+      elements.wordPreview.style.top = `${top}px`;
+      return;
+    }
+
+    let left = targetRect.right + gap;
+    if (left + previewRect.width > window.innerWidth - margin) left = targetRect.left - previewRect.width - gap;
+    left = Math.max(margin, Math.min(left, window.innerWidth - previewRect.width - margin));
+
+    let top = targetRect.top + targetRect.height / 2 - previewRect.height / 2;
+    top = Math.max(margin, Math.min(top, window.innerHeight - previewRect.height - margin));
+    elements.wordPreview.style.left = `${left}px`;
+    elements.wordPreview.style.top = `${top}px`;
+  }
+
+  function renderWordPreview(entry, target) {
+    if (target !== state.wordPreviewTarget || !target.isConnected) return;
+    elements.wordPreviewTerm.textContent = entry.headword || entry.selection;
+    elements.wordPreviewMeta.textContent = entry.partOfSpeech || "";
+    const pronunciation = entry.pronunciation || "";
+    elements.wordPreviewPronunciationUS.textContent = entry.pronunciationUS || pronunciation || "—";
+    elements.wordPreviewPronunciationUK.textContent = entry.pronunciationUK || pronunciation || "—";
+
+    const senses = Array.isArray(entry.senses) && entry.senses.length
+      ? entry.senses
+      : [{
+          partOfSpeech: entry.partOfSpeech,
+          meaning: entry.meaning,
+          englishDefinition: entry.englishMeaning,
+        }];
+    elements.wordPreviewSenses.replaceChildren(...senses.slice(0, 6).map((sense) => {
+      const row = document.createElement("section");
+      const heading = document.createElement("span");
+      heading.textContent = sense.partOfSpeech || "常用释义";
+      const meaning = document.createElement("p");
+      meaning.textContent = sense.meaning || "";
+      const definition = document.createElement("small");
+      definition.textContent = sense.englishDefinition || "";
+      row.append(heading, meaning, definition);
+      return row;
+    }));
+
+    const forms = Array.isArray(entry.wordForms) ? entry.wordForms.filter((item) => item && item.word) : [];
+    elements.wordPreviewForms.textContent = forms
+      .slice(0, 6)
+      .map((item) => `${item.label || "词形"} ${item.word}`)
+      .join(" · ");
+    elements.wordPreviewForms.classList.toggle("is-hidden", !forms.length);
+    elements.wordPreview.classList.remove("is-hidden");
+    target.setAttribute("aria-describedby", "wordPreview");
+    requestAnimationFrame(() => positionWordPreview(target));
+  }
+
+  function scheduleWordPreview(target) {
+    if (!target || target === state.wordPreviewTarget || !state.transcriptId) return;
+    hideWordPreview();
+    state.wordPreviewTarget = target;
+    state.wordPreviewTimer = window.setTimeout(async () => {
+      const selection = String(target.dataset.selection || "").trim();
+      const index = Number(target.dataset.index);
+      if (!selection || !state.transcript[index] || target !== state.wordPreviewTarget) return;
+      const controller = new AbortController();
+      state.wordPreviewController = controller;
+      try {
+        const entry = await fetchLocalDefinition(selection, index, controller.signal);
+        if (!controller.signal.aborted) renderWordPreview(entry, target);
+      } catch (error) {
+        if (error.name !== "AbortError" && target === state.wordPreviewTarget) hideWordPreview();
+      } finally {
+        if (state.wordPreviewController === controller) state.wordPreviewController = null;
+      }
+    }, 480);
   }
 
   async function lookupDefinition(selectionValue, index) {
@@ -1815,7 +1976,30 @@
     const controller = new AbortController();
     state.dictionaryController = controller;
     const token = state.loadToken;
+    let localEntry = null;
+    let enrichmentFinished = false;
+    const localPromise = fetchLocalDefinition(selection, index, controller.signal)
+      .then((entry) => {
+        localEntry = entry;
+        if (
+          token === state.loadToken
+          && requestId === state.dictionaryRequestId
+          && !controller.signal.aborted
+          && !enrichmentFinished
+        ) renderDictionaryEntry(entry, { enriching: state.languageAvailable });
+        return entry;
+      })
+      .catch(() => null);
+
     try {
+      if (!state.languageAvailable) {
+        const entry = await localPromise;
+        if (!entry) throw new Error("本地词典暂未收录该词或短语。配置模型 API 后可使用 AI 语境解释。");
+        state.dictionaryCache.set(cacheKey, entry);
+        if (requestId === state.dictionaryRequestId) renderDictionaryEntry(entry);
+        return;
+      }
+
       const response = await fetch("/api/dictionary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1830,14 +2014,25 @@
       const payload = await readApiPayload(response, "词典查询暂时不可用，请稍后再试。");
       if (token !== state.loadToken || requestId !== state.dictionaryRequestId || controller.signal.aborted) return;
       const entry = payload.entry || {};
+      enrichmentFinished = true;
       state.dictionaryCache.set(cacheKey, entry);
       renderDictionaryEntry(entry);
     } catch (error) {
+      if (error.name !== "AbortError") await localPromise;
       if (
         error.name !== "AbortError"
         && token === state.loadToken
         && requestId === state.dictionaryRequestId
-      ) showDictionaryError(error.message);
+      ) {
+        if (localEntry) {
+          elements.dictionaryCard.classList.remove("is-enriching");
+          elements.dictionaryCard.setAttribute("aria-busy", "false");
+          const meta = localEntry.partOfSpeech || "";
+          elements.dictionaryMeta.textContent = `${meta}${meta ? " · " : ""}AI 补充暂不可用`;
+        } else {
+          showDictionaryError(error.message);
+        }
+      }
     } finally {
       if (state.dictionaryController === controller) state.dictionaryController = null;
     }
@@ -2273,7 +2468,19 @@
   });
   elements.rewindButton.addEventListener("click", () => jumpSentence(-1));
   elements.forwardButton.addEventListener("click", () => jumpSentence(1));
-  elements.progressRange.addEventListener("input", (event) => seekTo(event.target.value));
+  elements.progressRange.addEventListener("input", (event) => {
+    seekTo(event.target.value);
+    updateProgressTooltip(Number(event.target.value));
+  });
+  elements.progressRange.addEventListener("pointerenter", (event) => {
+    state.timelineHovering = true;
+    previewTimelineAt(event.clientX);
+  });
+  elements.progressRange.addEventListener("pointermove", (event) => previewTimelineAt(event.clientX));
+  elements.progressRange.addEventListener("pointerleave", () => {
+    state.timelineHovering = false;
+    updateProgressTooltip(state.currentTime);
+  });
   elements.speedButton.addEventListener("click", () => toggleTuningPopover(elements.speedButton, elements.speedPopover));
   elements.speedRange.addEventListener("input", (event) => setPlaybackSpeed(event.target.value));
   elements.volumeButton.addEventListener("click", () => toggleTuningPopover(elements.volumeButton, elements.volumePopover));
@@ -2308,6 +2515,7 @@
   elements.transcriptList.addEventListener("pointerdown", (event) => {
     const word = event.target.closest(".line-word");
     if (!word || (event.button !== undefined && event.button !== 0)) return;
+    hideWordPreview();
     state.phrasePointer = {
       pointerId: event.pointerId,
       startWord: word,
@@ -2383,6 +2591,26 @@
     if (segment) seekTo(segment.start, { play: true });
   });
   elements.transcriptList.addEventListener("pointerup", () => window.setTimeout(lookupSelectedPhrase, 0));
+
+  elements.workspaceView.addEventListener("mousemove", (event) => {
+    const word = event.target.closest(".line-word[data-selection], .caption-word[data-selection]");
+    if (!word) return;
+    scheduleWordPreview(word);
+  });
+  elements.workspaceView.addEventListener("mouseout", (event) => {
+    const word = event.target.closest(".line-word[data-selection], .caption-word[data-selection]");
+    if (!word || word !== state.wordPreviewTarget) return;
+    const related = event.relatedTarget instanceof Element ? event.relatedTarget : null;
+    if (related && related.closest(".line-word[data-selection], .caption-word[data-selection]") === word) return;
+    hideWordPreview();
+  });
+  elements.workspaceView.addEventListener("focusin", (event) => {
+    const word = event.target.closest(".line-word[data-selection], .caption-word[data-selection]");
+    if (word) scheduleWordPreview(word);
+  });
+  elements.workspaceView.addEventListener("focusout", (event) => {
+    if (event.target === state.wordPreviewTarget) hideWordPreview();
+  });
 
   document.addEventListener("pointerdown", (event) => {
     if (!event.target.closest(".tuning-menu")) closeTuningPopovers();

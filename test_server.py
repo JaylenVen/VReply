@@ -373,6 +373,30 @@ class LanguageServiceTests(unittest.TestCase):
         self.assertEqual(result["entry"]["contextMeaning"], "")
         ai_call.assert_not_called()
 
+    def test_local_only_dictionary_returns_before_ai_enrichment(self) -> None:
+        payload = {
+            "transcriptId": self.transcript["transcriptId"],
+            "segmentId": 2,
+            "selection": "take off",
+            "targetLanguage": "zh-CN",
+            "localOnly": True,
+        }
+        local_entry = {
+            "selection": "take off",
+            "headword": "take off",
+            "source": "local",
+            "senses": [{"partOfSpeech": "短语动词", "meaning": "起飞"}],
+        }
+
+        with patch.object(server, "_local_dictionary_lookup", return_value=local_entry), patch.object(
+            server, "_llm_config"
+        ) as llm_config, patch.object(server, "_call_llm_structured") as ai_call:
+            result = server.define_selection(payload)
+
+        self.assertEqual(result["entry"], local_entry)
+        llm_config.assert_not_called()
+        ai_call.assert_not_called()
+
     def test_local_dictionary_resolves_inflected_word_aliases(self) -> None:
         entry = server._local_dictionary_lookup("agents")
 

@@ -2029,6 +2029,11 @@ def define_selection(payload: dict[str, Any]) -> dict[str, Any]:
             raise APIError(400, "selection_not_in_segment", "The selected word is not in this transcript line.")
 
     local_entry = _local_dictionary_lookup(selection)
+    if payload.get("localOnly") is True:
+        if local_entry is None:
+            raise APIError(404, "dictionary_entry_not_found", "本地词典暂未收录该词或短语。")
+        return {"ok": True, "entry": local_entry}
+
     try:
         llm = _llm_config()
     except APIError as exc:
