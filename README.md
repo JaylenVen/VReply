@@ -28,7 +28,7 @@ python server.py
 
 ## 翻译与查词
 
-点击页面右上角 **Translation** 选择翻译方式：
+点击页面右上角 **设置 → 翻译与发音** 选择翻译方式：
 
 - **Chrome 内置翻译**：桌面版 Chrome 138+，无需 API Key；首次使用可能下载语言包。
 - **自定义模型 API**：填写兼容 `POST /chat/completions` 的服务地址、模型与 API Key。

@@ -5,6 +5,93 @@
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3];
   const TRANSLATION_ENGINE_KEY = "vreply:translation-engine";
   const PRONUNCIATION_ACCENT_KEY = "vreply:pronunciation-accent";
+  const SUBTITLE_STYLE_KEY = "vreply:subtitle-style";
+  const DEFAULT_SUBTITLE_STYLE = Object.freeze({
+    scale: 100,
+    originalFont: "inter",
+    translationFont: "source-han-sans",
+    translationColor: "#d8d1c3",
+    opacity: 80,
+    bold: false,
+  });
+  const ORIGINAL_FONTS = Object.freeze({
+    inter: '"Inter", "Helvetica Neue", Arial, sans-serif',
+    "ibm-plex": '"IBM Plex Sans", "Helvetica Neue", Arial, sans-serif',
+    "source-serif": '"Source Serif 4", Georgia, serif',
+  });
+  const TRANSLATION_FONTS = Object.freeze({
+    "source-han-sans": '"Source Han Sans SC", "Noto Sans SC", "PingFang SC", sans-serif',
+    "noto-serif": '"Noto Serif SC", "Source Han Serif SC", "Songti SC", serif',
+    system: '"PingFang SC", "Microsoft YaHei", sans-serif',
+  });
+  const COMMON_PHRASES = new Map(Object.entries({
+    "a little bit": ["一点；稍微", "to a small degree"],
+    "a lot of": ["许多；大量", "a large amount or number of"],
+    "according to": ["根据；按照", "as stated or reported by"],
+    "all the time": ["一直；始终", "continuously or very often"],
+    "as a result": ["因此；结果", "because of what happened"],
+    "as long as": ["只要；在……期间", "provided that"],
+    "as soon as": ["一……就……", "immediately when"],
+    "as well": ["也；还", "in addition"],
+    "at least": ["至少", "not less than"],
+    "be able to": ["能够", "have the ability to"],
+    "be supposed to": ["应该；按理应当", "be expected or required to"],
+    "because of": ["因为；由于", "on account of"],
+    "by the way": ["顺便说一下", "used to introduce a side topic"],
+    "come from": ["来自；源于", "originate in"],
+    "come up with": ["想出；提出", "produce an idea or solution"],
+    "deal with": ["处理；应对", "take action about something"],
+    "end up": ["最终成为；最后处于", "eventually reach a situation"],
+    "even though": ["尽管；虽然", "despite the fact that"],
+    "figure out": ["弄懂；想出", "understand or solve"],
+    "find out": ["查明；发现", "discover information"],
+    "for example": ["例如", "used to introduce an example"],
+    "for instance": ["例如", "as an example"],
+    "get back": ["回来；取回", "return or recover"],
+    "get used to": ["习惯于", "become accustomed to"],
+    "go ahead": ["继续；请便", "proceed"],
+    "go back": ["回去；追溯", "return to a place or time"],
+    "going to": ["将要；打算", "planning or expected to"],
+    "have to": ["不得不；必须", "be required to"],
+    "in fact": ["事实上", "used to emphasize what is true"],
+    "in front of": ["在……前面", "before or ahead of"],
+    "in order to": ["为了", "for the purpose of"],
+    "instead of": ["而不是；代替", "in place of"],
+    "it turns out": ["结果是；原来", "the eventual fact is"],
+    "keep in mind": ["记住；留意", "remember and consider"],
+    "kind of": ["有点；某种程度上", "somewhat or approximately"],
+    "look after": ["照顾", "take care of"],
+    "look at": ["看；审视", "direct attention toward"],
+    "look for": ["寻找", "try to find"],
+    "look forward to": ["期待", "feel pleased about something future"],
+    "make sure": ["确保；确认", "check that something is certain"],
+    "more than": ["超过；不仅仅", "greater than"],
+    "next to": ["紧挨着；几乎", "beside"],
+    "no matter": ["无论；不管", "regardless of"],
+    "of course": ["当然", "as expected or naturally"],
+    "on the other hand": ["另一方面", "used to present a contrast"],
+    "one of the": ["……之一", "a single member of a group"],
+    "out of": ["从……中；因为；缺少", "from within or because of"],
+    "pick up": ["拿起；接人；学会", "collect, lift, or learn informally"],
+    "put on": ["穿上；播放；增加", "place clothing on or present"],
+    "rather than": ["而不是", "instead of"],
+    "right now": ["现在；立刻", "at this moment"],
+    "so that": ["以便；所以", "in order that"],
+    "sort of": ["有点；算是", "somewhat"],
+    "take a look": ["看一看", "look briefly"],
+    "take care of": ["照顾；处理", "look after or handle"],
+    "take off": ["脱下；起飞；迅速成功", "remove, leave the ground, or grow quickly"],
+    "the rest of": ["其余的", "what remains"],
+    "thanks to": ["多亏；由于", "because of"],
+    "turn off": ["关闭；使厌烦", "stop a device or repel"],
+    "turn on": ["打开；启动", "start a device"],
+    "used to": ["过去常常", "describes a past habit or state"],
+    "work on": ["从事；改善", "spend time developing something"],
+  }));
+
+  const COMMON_PHRASE_ENTRIES = Array.from(COMMON_PHRASES.keys())
+    .map((phrase) => ({ phrase, tokens: phrase.split(" ") }))
+    .sort((left, right) => right.tokens.length - left.tokens.length);
 
   function initialTranslationEngine() {
     try {
@@ -24,6 +111,23 @@
     }
   }
 
+  function initialSubtitleStyle() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SUBTITLE_STYLE_KEY) || "null");
+      if (!saved || typeof saved !== "object") return { ...DEFAULT_SUBTITLE_STYLE };
+      return {
+        scale: Math.max(80, Math.min(130, Math.round((Number(saved.scale) || 100) / 10) * 10)),
+        originalFont: ORIGINAL_FONTS[saved.originalFont] ? saved.originalFont : DEFAULT_SUBTITLE_STYLE.originalFont,
+        translationFont: TRANSLATION_FONTS[saved.translationFont] ? saved.translationFont : DEFAULT_SUBTITLE_STYLE.translationFont,
+        translationColor: /^#[0-9a-f]{6}$/i.test(saved.translationColor) ? saved.translationColor : DEFAULT_SUBTITLE_STYLE.translationColor,
+        opacity: Math.max(40, Math.min(100, Math.round((Number(saved.opacity) || 80) / 5) * 5)),
+        bold: Boolean(saved.bold),
+      };
+    } catch (_error) {
+      return { ...DEFAULT_SUBTITLE_STYLE };
+    }
+  }
+
   const elements = {
     landingView: document.getElementById("landingView"),
     workspaceView: document.getElementById("workspaceView"),
@@ -40,6 +144,20 @@
     aiSettingsError: document.getElementById("aiSettingsError"),
     aiSettingsSave: document.getElementById("aiSettingsSave"),
     aiConfigStatus: document.getElementById("aiConfigStatus"),
+    settingsNav: document.querySelector(".settings-nav"),
+    settingsPanes: Array.from(document.querySelectorAll("[data-settings-pane]")),
+    subtitleScaleDown: document.getElementById("subtitleScaleDown"),
+    subtitleScaleUp: document.getElementById("subtitleScaleUp"),
+    subtitleScaleValue: document.getElementById("subtitleScaleValue"),
+    subtitleOriginalFont: document.getElementById("subtitleOriginalFont"),
+    subtitleTranslationFont: document.getElementById("subtitleTranslationFont"),
+    subtitleTranslationColor: document.getElementById("subtitleTranslationColor"),
+    subtitleColorOptions: document.getElementById("subtitleColorOptions"),
+    subtitleOpacity: document.getElementById("subtitleOpacity"),
+    subtitleOpacityValue: document.getElementById("subtitleOpacityValue"),
+    subtitleBold: document.getElementById("subtitleBold"),
+    subtitlePreviewOriginal: document.getElementById("subtitlePreviewOriginal"),
+    subtitlePreviewTranslation: document.getElementById("subtitlePreviewTranslation"),
     translationEngineChrome: document.getElementById("translationEngineChrome"),
     translationEngineApi: document.getElementById("translationEngineApi"),
     pronunciationAccentUs: document.getElementById("pronunciationAccentUs"),
@@ -177,6 +295,8 @@
     llmConfig: null,
     translationEngine: initialTranslationEngine(),
     pronunciationAccent: initialPronunciationAccent(),
+    subtitleStyle: initialSubtitleStyle(),
+    settingsStyleSnapshot: null,
     chromeTranslationAvailability: "checking",
     chromeTranslator: null,
     chromeTranslatorPromise: null,
@@ -206,6 +326,7 @@
     analysisRequestId: 0,
     phrasePointer: null,
     suppressWordClick: false,
+    hoverLookupTarget: null,
     panelView: "transcript",
     summaryController: null,
     summaryLoading: false,
@@ -291,6 +412,9 @@
     state.dictionaryCache.clear();
     state.phrasePointer = null;
     state.suppressWordClick = false;
+    state.hoverLookupTarget = null;
+    state.studyOverlay = null;
+    state.resumeAfterStudy = false;
     if (state.translationTimer) window.clearTimeout(state.translationTimer);
     state.translationTimer = null;
     if (state.translationObserver) state.translationObserver.disconnect();
@@ -744,6 +868,10 @@
     if (options && options.preserveStudySession) return;
     const shouldResume = state.resumeAfterStudy && !(options && options.resume === false);
     state.studyOverlay = null;
+    if (state.hoverLookupTarget && type !== "lookup-hover") {
+      state.studyOverlay = "lookup-hover";
+      return;
+    }
     state.resumeAfterStudy = false;
     if (shouldResume) resumePlayback();
   }
@@ -895,6 +1023,48 @@
     updateCaptionTranslation(index);
   }
 
+  function normalizePhraseToken(value) {
+    return String(value || "")
+      .toLocaleLowerCase("en")
+      .replace(/[’]/g, "'")
+      .match(/[a-z]+(?:'[a-z]+)*/u)?.[0] || "";
+  }
+
+  function commonPhraseRanges(values) {
+    const tokens = values.map(normalizePhraseToken);
+    const ranges = new Map();
+    for (let index = 0; index < tokens.length; index += 1) {
+      if (!tokens[index]) continue;
+      const match = COMMON_PHRASE_ENTRIES.find((entry) => (
+        index + entry.tokens.length <= tokens.length
+        && entry.tokens.every((token, offset) => token === tokens[index + offset])
+      ));
+      if (!match) continue;
+      ranges.set(index, { end: index + match.tokens.length - 1, phrase: match.phrase });
+      index += match.tokens.length - 1;
+    }
+    return ranges;
+  }
+
+  function makeCaptionWord(word, index, total, interactive = true) {
+    const span = document.createElement("span");
+    span.className = "caption-word";
+    if (/\d/u.test(String(word.text || ""))) span.classList.add("is-numeric");
+    span.dataset.word = String(index);
+    span.dataset.start = String(word.start);
+    span.dataset.end = String(word.end);
+    const selection = String(word.text || "").match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/u)?.[0] || "";
+    if (selection && interactive) {
+      span.dataset.selection = selection;
+      span.dataset.index = String(state.activeIndex);
+      span.tabIndex = 0;
+      span.setAttribute("role", "button");
+      span.setAttribute("aria-label", `查询 ${selection} 的释义`);
+    }
+    span.textContent = index === total - 1 ? word.text : `${word.text} `;
+    return span;
+  }
+
   function renderCaptionWords(segment) {
     elements.captionText.replaceChildren();
     const captionLength = String(segment.text || "").length;
@@ -910,23 +1080,26 @@
           end: segment.start + (duration * (index + 1)) / fallbackTokens.length,
         }));
 
-    words.forEach((word, index) => {
-        const span = document.createElement("span");
-        span.className = "caption-word";
-        span.dataset.word = String(index);
-        span.dataset.start = String(word.start);
-        span.dataset.end = String(word.end);
-        const selection = String(word.text || "").match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/u)?.[0] || "";
-        if (selection) {
-          span.dataset.selection = selection;
-          span.dataset.index = String(state.activeIndex);
-          span.tabIndex = 0;
-          span.setAttribute("role", "button");
-          span.setAttribute("aria-label", `查询 ${selection} 的释义`);
-        }
-        span.textContent = index === words.length - 1 ? word.text : `${word.text} `;
-        elements.captionText.appendChild(span);
-      });
+    const phraseRanges = commonPhraseRanges(words.map((word) => word.text));
+    for (let index = 0; index < words.length; index += 1) {
+      const phraseRange = phraseRanges.get(index);
+      if (!phraseRange) {
+        elements.captionText.appendChild(makeCaptionWord(words[index], index, words.length));
+        continue;
+      }
+      const phrase = document.createElement("span");
+      phrase.className = "caption-phrase";
+      phrase.dataset.selection = phraseRange.phrase;
+      phrase.dataset.index = String(state.activeIndex);
+      phrase.tabIndex = 0;
+      phrase.setAttribute("role", "button");
+      phrase.setAttribute("aria-label", `查询短语 ${phraseRange.phrase} 的释义`);
+      for (let wordIndex = index; wordIndex <= phraseRange.end; wordIndex += 1) {
+        phrase.appendChild(makeCaptionWord(words[wordIndex], wordIndex, words.length, false));
+      }
+      elements.captionText.appendChild(phrase);
+      index = phraseRange.end;
+    }
   }
 
   function updateCaptionWord(time) {
@@ -1079,7 +1252,7 @@
     if (!state.interactiveReady || !state.transcriptId || state.summaryLoading) return;
     if (state.summaryTranscriptId === state.transcriptId) return;
     if (!state.languageAvailable) {
-      showSummaryError("请先在“翻译设置”中配置模型 API，然后重新生成内容简介。");
+      showSummaryError("请先在“设置”的“AI 能力”中配置模型，然后重新生成内容简介。");
       elements.summaryRetryButton.textContent = "配置 API";
       return;
     }
@@ -1094,7 +1267,7 @@
     elements.summaryRetryButton.classList.add("is-hidden");
     elements.summaryRetryButton.textContent = "重新生成";
     elements.summaryTitle.textContent = "正在总结视频…";
-    elements.summaryOverview.textContent = "正在使用翻译设置中的模型读取字幕并生成中文概括。";
+    elements.summaryOverview.textContent = "正在使用设置中的模型读取字幕并生成中文概括。";
     elements.summaryTopics.replaceChildren();
     elements.summaryPoints.replaceChildren();
 
@@ -1138,16 +1311,55 @@
 
   function appendLookupWords(container, text, lineIndex) {
     const value = String(text || "");
+    let parts = [];
     if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
       const segmenter = new Intl.Segmenter("en", { granularity: "word" });
-      Array.from(segmenter.segment(value)).forEach((part) => {
-        appendLookupPart(container, part.segment, Boolean(part.isWordLike), lineIndex);
-      });
-      return;
+      parts = Array.from(segmenter.segment(value)).map((part) => ({
+        text: part.segment,
+        isWordLike: Boolean(part.isWordLike),
+      }));
+    } else {
+      parts = (value.match(/\s+|[\p{L}\p{N}]+(?:['’.-][\p{L}\p{N}]+)*|[^\s]/gu) || [])
+        .map((part) => ({ text: part, isWordLike: /[\p{L}\p{N}]/u.test(part) }));
     }
 
-    const parts = value.match(/\s+|[\p{L}\p{N}]+(?:['’.-][\p{L}\p{N}]+)*|[^\s]/gu) || [];
-    parts.forEach((part) => appendLookupPart(container, part, /[\p{L}\p{N}]/u.test(part), lineIndex));
+    const wordPositions = parts.reduce((positions, part, index) => {
+      if (part.isWordLike) positions.push(index);
+      return positions;
+    }, []);
+    const phraseRanges = commonPhraseRanges(wordPositions.map((index) => parts[index].text));
+    const phrasesByPart = new Map();
+    phraseRanges.forEach((range, wordIndex) => {
+      phrasesByPart.set(wordPositions[wordIndex], {
+        end: wordPositions[range.end],
+        phrase: range.phrase,
+      });
+    });
+
+    for (let index = 0; index < parts.length; index += 1) {
+      const range = phrasesByPart.get(index);
+      if (!range) {
+        appendLookupPart(container, parts[index].text, parts[index].isWordLike, lineIndex);
+        continue;
+      }
+      const phrase = document.createElement("span");
+      phrase.className = "line-phrase";
+      phrase.dataset.index = String(lineIndex);
+      phrase.dataset.selection = range.phrase;
+      phrase.tabIndex = 0;
+      phrase.setAttribute("role", "button");
+      phrase.setAttribute("aria-label", `查询短语 ${range.phrase} 的释义`);
+      for (let partIndex = index; partIndex <= range.end; partIndex += 1) {
+        appendLookupPart(
+          phrase,
+          parts[partIndex].text,
+          parts[partIndex].isWordLike,
+          lineIndex
+        );
+      }
+      container.appendChild(phrase);
+      index = range.end;
+    }
   }
 
   function appendLookupPart(container, text, isWordLike, lineIndex) {
@@ -1157,6 +1369,7 @@
     }
     const word = document.createElement("span");
     word.className = "line-word";
+    if (/\d/u.test(text)) word.classList.add("is-numeric");
     word.dataset.index = String(lineIndex);
     word.dataset.selection = text;
     word.textContent = text;
@@ -1211,17 +1424,19 @@
     elements.translationToggle.setAttribute("aria-pressed", String(state.showTranslations));
     updateTranslationProgress();
     if (state.translationEngine === "chrome") {
-      elements.translationToggle.title = available
-        ? "使用 Chrome 内置翻译显示或隐藏简体中文译文"
-        : chromeAvailabilityText();
+      elements.translationToggle.removeAttribute("title");
+      elements.translationToggle.dataset.hint = available
+        ? "双语对照 · Chrome 本地翻译"
+        : "请先在设置中启用翻译";
       elements.languageStatus.textContent = `Chrome 内置翻译：${chromeAvailabilityText()}`;
     } else {
-      elements.translationToggle.title = state.languageAvailable
-        ? "使用自定义 API 显示或隐藏简体中文译文"
-        : "请打开翻译设置并配置模型 API";
+      elements.translationToggle.removeAttribute("title");
+      elements.translationToggle.dataset.hint = state.languageAvailable
+        ? "双语对照 · 模型翻译"
+        : "请先在设置中配置模型";
       elements.languageStatus.textContent = state.languageAvailable
         ? "自定义 API 翻译已就绪。"
-        : "API 翻译尚未配置，请打开翻译设置。";
+        : "API 翻译尚未配置，请打开设置。";
     }
     elements.chromeTranslationStatus.textContent = chromeAvailabilityText();
     elements.chromeEngineOption.classList.toggle(
@@ -1421,7 +1636,7 @@
       }
     }
     if (!state.languageAvailable) {
-      showToast("API 翻译尚未配置", "请打开翻译设置填写 API 信息。");
+      showToast("API 翻译尚未配置", "请在设置中填写模型 API 信息。");
       return false;
     }
     return true;
@@ -1571,7 +1786,86 @@
     if (state.transcript.length) renderTranscript(elements.transcriptSearch.value);
   }
 
-  function openAiSettings() {
+  function applySubtitleStyle(style = state.subtitleStyle) {
+    const root = document.documentElement;
+    const scale = style.scale / 100;
+    root.style.setProperty("--caption-original-size", `${(23 * scale).toFixed(1)}px`);
+    root.style.setProperty("--caption-original-long-size", `${(20 * scale).toFixed(1)}px`);
+    root.style.setProperty("--caption-original-very-long-size", `${(18 * scale).toFixed(1)}px`);
+    root.style.setProperty("--caption-translation-size", `${(14 * scale).toFixed(1)}px`);
+    root.style.setProperty("--transcript-original-size", `${(14 * scale).toFixed(1)}px`);
+    root.style.setProperty("--transcript-active-size", `${(16.5 * scale).toFixed(1)}px`);
+    root.style.setProperty("--transcript-translation-size", `${(10.5 * scale).toFixed(1)}px`);
+    root.style.setProperty("--transcript-active-translation-size", `${(11.5 * scale).toFixed(1)}px`);
+    root.style.setProperty("--subtitle-original-font", ORIGINAL_FONTS[style.originalFont]);
+    root.style.setProperty("--subtitle-translation-font", TRANSLATION_FONTS[style.translationFont]);
+    root.style.setProperty("--subtitle-translation-color", style.translationColor);
+    root.style.setProperty("--subtitle-translation-opacity", (style.opacity / 100).toFixed(2));
+    root.style.setProperty("--subtitle-original-weight", style.bold ? "650" : "500");
+    root.style.setProperty("--subtitle-translation-weight", style.bold ? "600" : "400");
+  }
+
+  function syncSubtitleStyleControls() {
+    const style = state.subtitleStyle;
+    elements.subtitleScaleValue.value = `${style.scale}%`;
+    elements.subtitleOriginalFont.value = style.originalFont;
+    elements.subtitleTranslationFont.value = style.translationFont;
+    elements.subtitleTranslationColor.value = style.translationColor;
+    elements.subtitleOpacity.value = String(style.opacity);
+    elements.subtitleOpacityValue.value = `${style.opacity}%`;
+    elements.subtitleBold.checked = style.bold;
+    elements.subtitleOpacity.style.setProperty("--fill", `${style.opacity}%`);
+    elements.subtitleColorOptions.querySelectorAll("[data-subtitle-color]").forEach((button) => {
+      button.classList.toggle(
+        "is-active",
+        button.dataset.subtitleColor.toLocaleLowerCase() === style.translationColor.toLocaleLowerCase()
+      );
+    });
+    applySubtitleStyle(style);
+  }
+
+  function updateSubtitleStyleFromControls() {
+    state.subtitleStyle = {
+      scale: Number(elements.subtitleScaleValue.value.replace("%", "")) || 100,
+      originalFont: elements.subtitleOriginalFont.value,
+      translationFont: elements.subtitleTranslationFont.value,
+      translationColor: elements.subtitleTranslationColor.value,
+      opacity: Number(elements.subtitleOpacity.value),
+      bold: elements.subtitleBold.checked,
+    };
+    syncSubtitleStyleControls();
+  }
+
+  function adjustSubtitleScale(delta) {
+    const current = Number(elements.subtitleScaleValue.value.replace("%", "")) || 100;
+    const next = Math.max(80, Math.min(130, current + delta));
+    elements.subtitleScaleValue.value = `${next}%`;
+    updateSubtitleStyleFromControls();
+  }
+
+  function persistSubtitleStyle() {
+    try {
+      localStorage.setItem(SUBTITLE_STYLE_KEY, JSON.stringify(state.subtitleStyle));
+    } catch (_error) {
+      // The style remains active for the current session when storage is unavailable.
+    }
+  }
+
+  function setSettingsPane(target) {
+    const pane = ["appearance", "language", "ai"].includes(target) ? target : "appearance";
+    elements.settingsNav.querySelectorAll("[data-settings-target]").forEach((button) => {
+      const active = button.dataset.settingsTarget === pane;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-selected", String(active));
+      button.tabIndex = active ? 0 : -1;
+    });
+    elements.settingsPanes.forEach((section) => {
+      section.classList.toggle("is-hidden", section.dataset.settingsPane !== pane);
+    });
+  }
+
+  function openAiSettings(requestedPane) {
+    const pane = typeof requestedPane === "string" ? requestedPane : "appearance";
     const config = state.llmConfig || {};
     elements.aiBaseUrl.value = config.baseUrl || "https://api.deepseek.com";
     elements.aiModel.value = config.model || "deepseek-v4-flash";
@@ -1579,6 +1873,9 @@
     elements.pronunciationAccentUs.checked = state.pronunciationAccent === "en-US";
     elements.pronunciationAccentUk.checked = state.pronunciationAccent === "en-GB";
     elements.aiSettingsError.textContent = "";
+    state.settingsStyleSnapshot = { ...state.subtitleStyle };
+    syncSubtitleStyleControls();
+    setSettingsPane(pane);
     syncTranslationSettingsForm();
     elements.aiConfigStatus.textContent = state.translationEngine === "chrome"
       ? "已选择 Chrome 本地翻译"
@@ -1590,12 +1887,16 @@
       : "密钥只保存在服务进程内存中，服务停止后会自动清除。";
     elements.aiSettingsModal.classList.remove("is-hidden");
     window.requestAnimationFrame(() => {
-      if (state.translationEngine === "chrome") elements.translationEngineChrome.focus();
-      else elements.aiBaseUrl.focus();
+      elements.settingsNav.querySelector(".is-active")?.focus();
     });
   }
 
-  function closeAiSettings() {
+  function closeAiSettings(options) {
+    if (state.settingsStyleSnapshot && !(options && options.keepChanges)) {
+      state.subtitleStyle = { ...state.settingsStyleSnapshot };
+      applySubtitleStyle();
+    }
+    state.settingsStyleSnapshot = null;
     elements.aiSettingsModal.classList.add("is-hidden");
     elements.aiSettingsError.textContent = "";
   }
@@ -1661,9 +1962,11 @@
         state.summaryTranscriptId = null;
         resetSummaryView();
       }
-      closeAiSettings();
+      persistSubtitleStyle();
+      state.settingsStyleSnapshot = null;
+      closeAiSettings({ keepChanges: true });
       showToast(
-        "翻译设置已保存",
+        "设置已保存",
         engine === "chrome"
           ? state.languageAvailable
             ? `字幕继续使用 Chrome；内容简介将使用 ${state.llmConfig.model}。`
@@ -1841,6 +2144,25 @@
     const cached = state.localDictionaryCache.get(cacheKey);
     if (cached) return cached;
 
+    const phraseDefinition = COMMON_PHRASES.get(cacheKey);
+    if (phraseDefinition) {
+      const entry = {
+        source: "local",
+        selection,
+        headword: selection,
+        partOfSpeech: "常用短语",
+        meaning: phraseDefinition[0],
+        englishMeaning: phraseDefinition[1],
+        senses: [{
+          partOfSpeech: "常用短语",
+          meaning: phraseDefinition[0],
+          englishDefinition: phraseDefinition[1],
+        }],
+      };
+      state.localDictionaryCache.set(cacheKey, entry);
+      return entry;
+    }
+
     const response = await fetch("/api/dictionary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1874,7 +2196,7 @@
     const previewRect = elements.wordPreview.getBoundingClientRect();
     const margin = 12;
     const gap = 12;
-    if (target.classList.contains("caption-word")) {
+    if (target.classList.contains("caption-word") || target.classList.contains("caption-phrase")) {
       let left = Math.max(margin, Math.min(targetRect.left, window.innerWidth - previewRect.width - margin));
       let top = targetRect.top - previewRect.height - gap;
       if (top < margin) top = targetRect.bottom + gap;
@@ -2196,8 +2518,8 @@
     const segment = state.transcript[index];
     if (!segment || !state.transcriptId) return;
     if (!state.languageAvailable) {
-      showToast("需要配置模型 API", "AI 句子分析会使用翻译设置中的模型。");
-      openAiSettings();
+      showToast("需要配置模型 API", "请先在设置中连接用于句子分析的模型。");
+      openAiSettings("ai");
       return;
     }
 
@@ -2325,6 +2647,9 @@
     state.translationInFlight.clear();
     state.phrasePointer = null;
     state.suppressWordClick = false;
+    state.hoverLookupTarget = null;
+    state.studyOverlay = null;
+    state.resumeAfterStudy = false;
     state.translationControllers.forEach((controller) => controller.abort());
     state.translationControllers.clear();
     state.translationActiveBatches = 0;
@@ -2344,7 +2669,6 @@
     elements.videoAmbient.style.backgroundImage = "";
     elements.workspaceView.classList.add("is-hidden");
     elements.landingView.classList.remove("is-hidden");
-    elements.aiSettingsButton.classList.add("is-hidden");
     elements.newVideoButton.classList.add("is-hidden");
     elements.videoUrl.value = "";
     elements.transcriptSearch.value = "";
@@ -2419,15 +2743,40 @@
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
 
+  function subtitleLookupTarget(node) {
+    if (!(node instanceof Element)) return null;
+    return node.closest(".line-phrase[data-selection], .caption-phrase[data-selection]")
+      || node.closest(".line-word[data-selection], .caption-word[data-selection]");
+  }
+
   elements.urlForm.addEventListener("submit", (event) => {
     event.preventDefault();
     startImport(elements.videoUrl.value);
   });
 
   elements.videoUrl.addEventListener("input", clearFieldError);
-  elements.aiSettingsButton.addEventListener("click", openAiSettings);
-  elements.aiSettingsClose.addEventListener("click", closeAiSettings);
+  elements.aiSettingsButton.addEventListener("click", () => openAiSettings());
+  elements.aiSettingsClose.addEventListener("click", () => closeAiSettings());
   elements.aiSettingsForm.addEventListener("submit", saveAiSettings);
+  elements.settingsNav.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-settings-target]");
+    if (button) setSettingsPane(button.dataset.settingsTarget);
+  });
+  elements.subtitleScaleDown.addEventListener("click", () => adjustSubtitleScale(-10));
+  elements.subtitleScaleUp.addEventListener("click", () => adjustSubtitleScale(10));
+  [
+    elements.subtitleOriginalFont,
+    elements.subtitleTranslationFont,
+    elements.subtitleTranslationColor,
+    elements.subtitleOpacity,
+    elements.subtitleBold,
+  ].forEach((input) => input.addEventListener("input", updateSubtitleStyleFromControls));
+  elements.subtitleColorOptions.addEventListener("click", (event) => {
+    const swatch = event.target.closest("[data-subtitle-color]");
+    if (!swatch) return;
+    elements.subtitleTranslationColor.value = swatch.dataset.subtitleColor;
+    updateSubtitleStyleFromControls();
+  });
   [elements.translationEngineChrome, elements.translationEngineApi].forEach((input) => {
     input.addEventListener("change", () => {
       syncTranslationSettingsForm(input.value);
@@ -2449,20 +2798,20 @@
     togglePlay();
   });
   elements.videoStage.addEventListener("click", (event) => {
-    if (event.target.closest(".extract-overlay, .caption-word") || !state.interactiveReady) return;
+    if (event.target.closest(".extract-overlay, .caption-word, .caption-phrase") || !state.interactiveReady) return;
     closeStudyOverlayForPlayback();
     togglePlay();
   });
   elements.captionText.addEventListener("click", (event) => {
-    const word = event.target.closest(".caption-word[data-selection]");
-    if (!word) return;
+    const word = subtitleLookupTarget(event.target);
+    if (!word || !word.closest("#captionText")) return;
     event.stopPropagation();
     lookupDefinition(word.dataset.selection, Number(word.dataset.index));
   });
   elements.captionText.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
-    const word = event.target.closest(".caption-word[data-selection]");
-    if (!word) return;
+    const word = subtitleLookupTarget(event.target);
+    if (!word || !word.closest("#captionText")) return;
     event.preventDefault();
     lookupDefinition(word.dataset.selection, Number(word.dataset.index));
   });
@@ -2495,7 +2844,7 @@
   elements.summaryRetryButton.addEventListener("click", () => {
     state.summaryTranscriptId = null;
     if (state.languageAvailable) loadAiSummary();
-    else openAiSettings();
+    else openAiSettings("ai");
   });
   elements.dictionaryClose.addEventListener("click", closeDictionary);
   elements.dictionaryPronunciations.addEventListener("click", (event) => {
@@ -2574,7 +2923,8 @@
       lookupSelectedPhrase();
       return;
     }
-    const word = event.target.closest(".line-word");
+    const word = subtitleLookupTarget(event.target);
+    if (word && !word.closest("#transcriptList")) return;
     if (word) {
       lookupDefinition(word.dataset.selection, Number(word.dataset.index));
       return;
@@ -2591,21 +2941,37 @@
     if (segment) seekTo(segment.start, { play: true });
   });
   elements.transcriptList.addEventListener("pointerup", () => window.setTimeout(lookupSelectedPhrase, 0));
+  elements.transcriptList.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const target = subtitleLookupTarget(event.target);
+    if (!target) return;
+    event.preventDefault();
+    lookupDefinition(target.dataset.selection, Number(target.dataset.index));
+  });
 
-  elements.workspaceView.addEventListener("mousemove", (event) => {
-    const word = event.target.closest(".line-word[data-selection], .caption-word[data-selection]");
-    if (!word) return;
-    scheduleWordPreview(word);
+  elements.workspaceView.addEventListener("mouseover", (event) => {
+    const target = subtitleLookupTarget(event.target);
+    if (!target || target === state.hoverLookupTarget) return;
+    if (!state.hoverLookupTarget && !state.studyOverlay) beginStudyOverlay("lookup-hover");
+    state.hoverLookupTarget = target;
+    scheduleWordPreview(target);
   });
   elements.workspaceView.addEventListener("mouseout", (event) => {
-    const word = event.target.closest(".line-word[data-selection], .caption-word[data-selection]");
-    if (!word || word !== state.wordPreviewTarget) return;
-    const related = event.relatedTarget instanceof Element ? event.relatedTarget : null;
-    if (related && related.closest(".line-word[data-selection], .caption-word[data-selection]") === word) return;
+    const target = subtitleLookupTarget(event.target);
+    if (!target || target !== state.hoverLookupTarget) return;
+    const related = subtitleLookupTarget(event.relatedTarget);
+    if (related === target) return;
+    if (related) {
+      state.hoverLookupTarget = related;
+      scheduleWordPreview(related);
+      return;
+    }
+    state.hoverLookupTarget = null;
     hideWordPreview();
+    endStudyOverlay("lookup-hover");
   });
   elements.workspaceView.addEventListener("focusin", (event) => {
-    const word = event.target.closest(".line-word[data-selection], .caption-word[data-selection]");
+    const word = subtitleLookupTarget(event.target);
     if (word) scheduleWordPreview(word);
   });
   elements.workspaceView.addEventListener("focusout", (event) => {
@@ -2617,15 +2983,16 @@
     if (
       !elements.dictionaryCard.classList.contains("is-hidden")
       && !event.target.closest("#dictionaryCard")
-      && !event.target.closest(".line-word, .caption-word, #analysisButton, #playButton, #videoStage")
+      && !event.target.closest(".line-word, .line-phrase, .caption-word, .caption-phrase, #analysisButton, #playButton, #videoStage")
     ) closeDictionary();
     if (
       !elements.analysisCard.classList.contains("is-hidden")
       && !event.target.closest("#analysisCard")
-      && !event.target.closest("#analysisButton, .line-word, .caption-word, #playButton, #videoStage")
+      && !event.target.closest("#analysisButton, .line-word, .line-phrase, .caption-word, .caption-phrase, #playButton, #videoStage")
     ) closeSentenceAnalysis();
   });
 
+  applySubtitleStyle();
   setPlaybackSpeed(SPEEDS.indexOf(state.speed));
   setVolume(state.volume);
 

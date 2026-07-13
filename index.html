@@ -10,7 +10,13 @@
     <meta name="theme-color" content="#100f0d" />
     <title>VReply — 看懂，也说得出</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%231b1812'/%3E%3Ctext x='18' y='46' fill='%23f6f3ec' font-size='42' font-family='Helvetica'%3EV%3C/text%3E%3Ccircle cx='53' cy='53' r='9' fill='%23ddb25b'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="styles.css?v=20260713-brand-gold" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=Inter:wght@400;500;600;700&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;family=Noto+Serif+SC:wght@400;600&amp;family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css?v=20260713-settings" />
   </head>
   <body>
     <div class="page-noise" aria-hidden="true"></div>
@@ -29,12 +35,12 @@
       </div>
 
       <div class="header-actions">
-        <button class="quiet-button is-hidden" id="aiSettingsButton" type="button">
+        <button class="quiet-button" id="aiSettingsButton" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
             <circle cx="12" cy="12" r="3.3" />
           </svg>
-          翻译设置
+          设置
         </button>
         <button class="quiet-button is-hidden" id="newVideoButton" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -250,11 +256,11 @@
 
             <div class="transcript-actions" aria-label="逐句字幕工具">
                 <span class="transcript-tool-label">字幕工具</span>
-                <button class="follow-toggle is-active" id="followToggle" type="button" aria-label="自动跟随字幕" aria-pressed="true" title="自动跟随字幕">
+                <button class="follow-toggle is-active" id="followToggle" type="button" aria-label="自动跟随字幕" aria-pressed="true" data-hint="跟随播放 · 当前句自动居中">
                   <span><i></i></span>
                   <b>跟随</b>
                 </button>
-                <button class="translation-toggle" id="translationToggle" type="button" aria-pressed="false" aria-describedby="languageStatus" disabled>
+                <button class="translation-toggle" id="translationToggle" type="button" aria-pressed="false" aria-describedby="languageStatus" data-hint="双语对照 · 显示或隐藏译文" disabled>
                   <span aria-hidden="true"><i></i></span>
                   <b>译文</b>
                   <small class="sr-only" id="translationProgress" aria-live="polite"></small>
@@ -355,83 +361,166 @@
       <section class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="aiSettingsTitle">
         <header class="settings-heading">
           <div>
-            <span class="settings-kicker">LANGUAGE TOOLS</span>
-            <h2 id="aiSettingsTitle">语言工具设置</h2>
+            <span class="settings-kicker">VREPLY PREFERENCES</span>
+            <h2 id="aiSettingsTitle">设置</h2>
           </div>
-          <button class="settings-close" id="aiSettingsClose" type="button" aria-label="关闭翻译设置">
+          <button class="settings-close" id="aiSettingsClose" type="button" aria-label="关闭设置">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
           </button>
         </header>
-        <p class="settings-intro">先设置日常查词偏好，再选择字幕翻译方式；AI 接口仅用于需要深度理解的增强功能。</p>
+        <p class="settings-intro">统一管理字幕阅读、翻译与语言能力。样式调整会在上方实时预览，保存后同步应用到两处字幕。</p>
         <form id="aiSettingsForm" class="settings-form">
-          <section class="settings-section settings-section-preference" aria-labelledby="preferenceSettingsTitle">
-            <header class="settings-section-heading">
-              <span>01</span>
-              <div><h3 id="preferenceSettingsTitle">查词与发音</h3><p>每次点词时立即使用你的默认口音朗读。</p></div>
-              <em>日常偏好</em>
-            </header>
-            <fieldset class="pronunciation-picker">
-              <legend class="sr-only">查词自动发音</legend>
-              <div class="pronunciation-options">
-                <label><input id="pronunciationAccentUs" name="pronunciationAccent" type="radio" value="en-US" /><span><b>US</b> 美式发音</span></label>
-                <label><input id="pronunciationAccentUk" name="pronunciationAccent" type="radio" value="en-GB" /><span><b>UK</b> 英式发音</span></label>
-              </div>
-            </fieldset>
-          </section>
+          <div class="settings-shell">
+            <nav class="settings-nav" aria-label="设置分类" role="tablist">
+              <button class="is-active" type="button" role="tab" aria-selected="true" aria-controls="settingsAppearance" data-settings-target="appearance">
+                <span>01</span><b>字幕样式</b><small>字体与显示</small>
+              </button>
+              <button type="button" role="tab" aria-selected="false" aria-controls="settingsLanguage" data-settings-target="language">
+                <span>02</span><b>翻译与发音</b><small>译文与查词</small>
+              </button>
+              <button type="button" role="tab" aria-selected="false" aria-controls="settingsAi" data-settings-target="ai">
+                <span>03</span><b>AI 能力</b><small>模型与接口</small>
+              </button>
+            </nav>
 
-          <section class="settings-section" aria-labelledby="translationSettingsTitle">
-            <header class="settings-section-heading">
-              <span>02</span>
-              <div><h3 id="translationSettingsTitle">字幕翻译</h3><p>选择整篇字幕默认使用的翻译引擎。</p></div>
-              <em>核心功能</em>
-            </header>
-            <fieldset class="engine-picker">
-              <legend class="sr-only">翻译方式</legend>
-              <label class="engine-option" id="chromeEngineOption">
-                <input id="translationEngineChrome" name="translationEngine" type="radio" value="chrome" />
-                <span class="engine-indicator" aria-hidden="true"></span>
-                <span class="engine-copy">
-                  <b>Chrome 本地翻译 <em>推荐</em></b>
-                  <small id="chromeTranslationStatus">正在检查浏览器支持情况…</small>
-                </span>
-              </label>
-              <label class="engine-option">
-                <input id="translationEngineApi" name="translationEngine" type="radio" value="api" />
-                <span class="engine-indicator" aria-hidden="true"></span>
-                <span class="engine-copy">
-                  <b>自定义模型 API</b>
-                  <small>更适合需要上下文判断的字幕内容。</small>
-                </span>
-              </label>
-            </fieldset>
-          </section>
+            <div class="settings-stage">
+              <section class="settings-pane" id="settingsAppearance" role="tabpanel" data-settings-pane="appearance" aria-labelledby="subtitleAppearanceTitle">
+                <header class="settings-pane-heading">
+                  <div><h3 id="subtitleAppearanceTitle">字幕样式</h3><p>分别调整原文和译文，同时作用于视频下方与右侧字幕。</p></div>
+                  <span>LIVE PREVIEW</span>
+                </header>
+                <div class="subtitle-style-preview" aria-label="字幕样式预览">
+                  <p id="subtitlePreviewOriginal">Speak clearly, stay curious.</p>
+                  <small id="subtitlePreviewTranslation">清晰表达，保持好奇。</small>
+                </div>
+                <div class="subtitle-settings-list">
+                  <div class="subtitle-setting-row">
+                    <div><b>字号</b><small>同步缩放原文与译文</small></div>
+                    <div class="font-size-stepper" aria-label="字幕字号">
+                      <button id="subtitleScaleDown" type="button" aria-label="减小字幕字号">−</button>
+                      <output id="subtitleScaleValue">100%</output>
+                      <button id="subtitleScaleUp" type="button" aria-label="增大字幕字号">＋</button>
+                    </div>
+                  </div>
+                  <label class="subtitle-setting-row" for="subtitleOriginalFont">
+                    <div><b>原文字体</b><small>英文字幕的阅读风格</small></div>
+                    <span class="settings-select-wrap">
+                      <select id="subtitleOriginalFont" name="subtitleOriginalFont">
+                        <option value="inter">Inter</option>
+                        <option value="ibm-plex">IBM Plex Sans</option>
+                        <option value="source-serif">Source Serif 4</option>
+                      </select>
+                    </span>
+                  </label>
+                  <label class="subtitle-setting-row" for="subtitleTranslationFont">
+                    <div><b>翻译字体</b><small>中文字幕的阅读风格</small></div>
+                    <span class="settings-select-wrap">
+                      <select id="subtitleTranslationFont" name="subtitleTranslationFont">
+                        <option value="source-han-sans">思源黑体</option>
+                        <option value="noto-serif">思源宋体</option>
+                        <option value="system">系统默认</option>
+                      </select>
+                    </span>
+                  </label>
+                  <div class="subtitle-setting-row">
+                    <div><b>翻译颜色</b><small>只调整译文色彩</small></div>
+                    <div class="subtitle-color-options" id="subtitleColorOptions" aria-label="翻译颜色">
+                      <button type="button" data-subtitle-color="#d8d1c3" style="--swatch: #d8d1c3" aria-label="暖灰"></button>
+                      <button type="button" data-subtitle-color="#f0c978" style="--swatch: #f0c978" aria-label="暖金"></button>
+                      <button type="button" data-subtitle-color="#bdd6cd" style="--swatch: #bdd6cd" aria-label="雾绿"></button>
+                      <label class="custom-color" aria-label="自定义翻译颜色"><input id="subtitleTranslationColor" name="subtitleTranslationColor" type="color" value="#d8d1c3" /></label>
+                    </div>
+                  </div>
+                  <label class="subtitle-setting-row" for="subtitleOpacity">
+                    <div><b>透明度</b><small>降低译文的视觉权重</small></div>
+                    <span class="subtitle-range-control">
+                      <input id="subtitleOpacity" name="subtitleOpacity" type="range" min="40" max="100" step="5" value="80" />
+                      <output id="subtitleOpacityValue" for="subtitleOpacity">80%</output>
+                    </span>
+                  </label>
+                  <label class="subtitle-setting-row" for="subtitleBold">
+                    <div><b>粗体</b><small>增强两种字幕的字重</small></div>
+                    <span class="settings-switch"><input id="subtitleBold" name="subtitleBold" type="checkbox" /><i></i></span>
+                  </label>
+                </div>
+              </section>
 
-          <section class="settings-section settings-section-ai" id="aiCapabilitySection" aria-labelledby="aiCapabilityTitle">
-            <header class="settings-section-heading">
-              <span>03</span>
-              <div><h3 id="aiCapabilityTitle">AI 增强能力</h3><p>为句子分析、内容简介和完整词典信息提供模型能力。</p></div>
-              <em id="aiRequirementBadge">按需配置</em>
-            </header>
-            <div class="ai-feature-list" aria-label="API 支持的功能"><span>句子分析</span><span>内容简介</span><span>语境查词</span><span>API 翻译</span></div>
-            <div class="api-settings-fields" id="apiSettingsFields">
-              <label>
-                <span>API 地址</span>
-                <input id="aiBaseUrl" name="baseUrl" type="url" autocomplete="url" placeholder="https://api.deepseek.com" />
-                <small>服务商基础地址，或完整的 <code>/chat/completions</code> 地址。</small>
-              </label>
-              <div class="api-field-row">
-                <label>
-                  <span>模型名称</span>
-                  <input id="aiModel" name="model" type="text" autocomplete="off" placeholder="deepseek-v4-flash" />
-                </label>
-                <label>
-                  <span>API 密钥</span>
-                  <input id="aiApiKey" name="apiKey" type="password" autocomplete="off" placeholder="粘贴 API 密钥" />
-                </label>
-              </div>
-              <small class="api-key-hint" id="aiKeyHint">已保存的密钥不会返回到浏览器。</small>
+              <section class="settings-pane is-hidden" id="settingsLanguage" role="tabpanel" data-settings-pane="language" aria-labelledby="translationSettingsTitle">
+                <header class="settings-pane-heading">
+                  <div><h3 id="translationSettingsTitle">翻译与发音</h3><p>选择整篇字幕的译文来源和查词默认口音。</p></div>
+                  <span>LANGUAGE</span>
+                </header>
+                <section class="settings-section settings-section-preference" aria-labelledby="preferenceSettingsTitle">
+                  <header class="settings-section-heading">
+                    <span>01</span>
+                    <div><h3 id="preferenceSettingsTitle">查词发音</h3><p>点击单词或短语后使用默认口音朗读。</p></div>
+                    <em>偏好</em>
+                  </header>
+                  <fieldset class="pronunciation-picker">
+                    <legend class="sr-only">查词自动发音</legend>
+                    <div class="pronunciation-options">
+                      <label><input id="pronunciationAccentUs" name="pronunciationAccent" type="radio" value="en-US" /><span><b>US</b> 美式发音</span></label>
+                      <label><input id="pronunciationAccentUk" name="pronunciationAccent" type="radio" value="en-GB" /><span><b>UK</b> 英式发音</span></label>
+                    </div>
+                  </fieldset>
+                </section>
+                <section class="settings-section">
+                  <header class="settings-section-heading">
+                    <span>02</span>
+                    <div><h3>字幕翻译</h3><p>选择整篇字幕默认使用的翻译引擎。</p></div>
+                    <em>核心</em>
+                  </header>
+                  <fieldset class="engine-picker">
+                    <legend class="sr-only">翻译方式</legend>
+                    <label class="engine-option" id="chromeEngineOption">
+                      <input id="translationEngineChrome" name="translationEngine" type="radio" value="chrome" />
+                      <span class="engine-indicator" aria-hidden="true"></span>
+                      <span class="engine-copy">
+                        <b>Chrome 本地翻译 <em>推荐</em></b>
+                        <small id="chromeTranslationStatus">正在检查浏览器支持情况…</small>
+                      </span>
+                    </label>
+                    <label class="engine-option">
+                      <input id="translationEngineApi" name="translationEngine" type="radio" value="api" />
+                      <span class="engine-indicator" aria-hidden="true"></span>
+                      <span class="engine-copy">
+                        <b>自定义模型 API</b>
+                        <small>更适合需要上下文判断的字幕内容。</small>
+                      </span>
+                    </label>
+                  </fieldset>
+                </section>
+              </section>
+
+              <section class="settings-pane is-hidden" id="settingsAi" role="tabpanel" data-settings-pane="ai" aria-labelledby="aiCapabilityTitle">
+                <header class="settings-pane-heading">
+                  <div><h3 id="aiCapabilityTitle">AI 能力</h3><p>配置兼容 OpenAI Chat Completions 的模型服务。</p></div>
+                  <span id="aiRequirementBadge">按需配置</span>
+                </header>
+                <section class="settings-section settings-section-ai" id="aiCapabilitySection">
+                  <div class="ai-feature-list" aria-label="API 支持的功能"><span>句子分析</span><span>内容简介</span><span>语境查词</span><span>API 翻译</span></div>
+                  <div class="api-settings-fields" id="apiSettingsFields">
+                    <label>
+                      <span>API 地址</span>
+                      <input id="aiBaseUrl" name="baseUrl" type="url" autocomplete="url" placeholder="https://api.deepseek.com" />
+                      <small>服务商基础地址，或完整的 <code>/chat/completions</code> 地址。</small>
+                    </label>
+                    <div class="api-field-row">
+                      <label>
+                        <span>模型名称</span>
+                        <input id="aiModel" name="model" type="text" autocomplete="off" placeholder="deepseek-v4-flash" />
+                      </label>
+                      <label>
+                        <span>API 密钥</span>
+                        <input id="aiApiKey" name="apiKey" type="password" autocomplete="off" placeholder="粘贴 API 密钥" />
+                      </label>
+                    </div>
+                    <small class="api-key-hint" id="aiKeyHint">已保存的密钥不会返回到浏览器。</small>
+                  </div>
+                </section>
+              </section>
             </div>
-          </section>
+          </div>
           <p class="settings-error" id="aiSettingsError" role="alert"></p>
           <div class="settings-footer">
             <span id="aiConfigStatus">正在检查翻译服务…</span>
