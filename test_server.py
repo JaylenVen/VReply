@@ -319,6 +319,18 @@ class LanguageServiceTests(unittest.TestCase):
                 "contextMeaning": "本句表示项目开始快速推进。",
                 "example": "The new product really took off.",
                 "exampleTranslation": "这款新产品迅速走红了。",
+                "senses": [{
+                    "partOfSpeech": "短语动词 phrasal verb",
+                    "meaning": "起飞；迅速开始成功",
+                    "englishDefinition": "To become successful or popular very quickly.",
+                    "example": "The new product really took off.",
+                    "exampleTranslation": "这款新产品迅速走红了。",
+                }],
+                "wordForms": [{"label": "过去式", "word": "took off"}],
+                "etymology": "由 take 与 off 构成。",
+                "phrases": [{"phrase": "take off from", "meaning": "从……起飞"}],
+                "synonyms": ["succeed", "soar"],
+                "wordFamily": [],
             }
 
         payload = {
@@ -337,6 +349,9 @@ class LanguageServiceTests(unittest.TestCase):
         self.assertEqual(calls[0]["input_data"]["context"]["previous"], "We turned the system on.")
         self.assertFalse(first["entry"]["cached"])
         self.assertTrue(second["entry"]["cached"])
+        self.assertEqual(first["entry"]["senses"][0]["partOfSpeech"], "短语动词 phrasal verb")
+        self.assertEqual(first["entry"]["wordForms"][0]["word"], "took off")
+        self.assertIn("soar", first["entry"]["synonyms"])
 
     def test_local_dictionary_works_without_an_api_key(self) -> None:
         payload = {
@@ -363,6 +378,15 @@ class LanguageServiceTests(unittest.TestCase):
 
         self.assertIsNotNone(entry)
         self.assertEqual(entry["headword"], "agent")
+
+    def test_local_dictionary_groups_parts_of_speech_and_word_forms(self) -> None:
+        entry = server._local_dictionary_lookup("run")
+
+        self.assertIsNotNone(entry)
+        self.assertGreaterEqual(len(entry["senses"]), 3)
+        self.assertTrue(any("名词 noun" == sense["partOfSpeech"] for sense in entry["senses"]))
+        self.assertTrue(any(form["word"] == "ran" for form in entry["wordForms"]))
+        self.assertTrue(any(form["word"] == "running" for form in entry["wordForms"]))
 
     def test_missing_local_entry_explains_optional_ai_fallback(self) -> None:
         payload = {

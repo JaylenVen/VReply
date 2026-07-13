@@ -283,20 +283,24 @@
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
                 </button>
               </header>
-              <p class="dictionary-status" id="dictionaryStatus">正在读取语境…</p>
+              <div class="dictionary-loading" id="dictionaryLoading" aria-hidden="true">
+                <div class="dictionary-loading-mark"><span>V</span><i></i><i></i><i></i></div>
+                <div class="dictionary-loading-lines"><i></i><i></i><i></i></div>
+                <div class="dictionary-loading-cards"><i></i><i></i></div>
+              </div>
+              <p class="dictionary-status sr-only" id="dictionaryStatus" aria-live="polite">词典释义加载中</p>
               <div class="dictionary-content is-hidden" id="dictionaryContent">
                 <div class="dictionary-pronunciations" id="dictionaryPronunciations">
                   <button type="button" data-accent="en-US" aria-label="播放美式发音"><b>美</b><span id="dictionaryPronunciationUS"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10v4h3l4 3V7l-4 3H5M16 9.5a4 4 0 0 1 0 5" /></svg></button>
                   <button type="button" data-accent="en-GB" aria-label="播放英式发音"><b>英</b><span id="dictionaryPronunciationUK"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10v4h3l4 3V7l-4 3H5M16 9.5a4 4 0 0 1 0 5" /></svg></button>
                 </div>
-                <section class="dictionary-definition"><span>中文释义</span><p class="dictionary-meaning" id="dictionaryMeaning"></p></section>
-                <section class="dictionary-definition"><span>English definition</span><p class="dictionary-english" id="dictionaryEnglishMeaning"></p></section>
+                <div class="dictionary-senses" id="dictionarySenses"></div>
                 <p class="dictionary-context" id="dictionaryContext"></p>
-                <div class="dictionary-example" id="dictionaryExampleBlock">
-                  <span>例句</span>
-                  <p id="dictionaryExample"></p>
-                  <small id="dictionaryExampleTranslation"></small>
-                </div>
+                <section class="dictionary-detail is-hidden" id="dictionaryWordFormsBlock"><span>词形变化</span><div class="dictionary-chips" id="dictionaryWordForms"></div></section>
+                <section class="dictionary-detail is-hidden" id="dictionaryEtymologyBlock"><span>词源</span><p id="dictionaryEtymology"></p></section>
+                <section class="dictionary-detail is-hidden" id="dictionaryPhrasesBlock"><span>相关短语</span><div class="dictionary-detail-list" id="dictionaryPhrases"></div></section>
+                <section class="dictionary-detail is-hidden" id="dictionarySynonymsBlock"><span>近义词</span><div class="dictionary-chips" id="dictionarySynonyms"></div></section>
+                <section class="dictionary-detail is-hidden" id="dictionaryWordFamilyBlock"><span>同根词</span><div class="dictionary-detail-list" id="dictionaryWordFamily"></div></section>
               </div>
             </section>
 
@@ -333,55 +337,83 @@
       <section class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="aiSettingsTitle">
         <header class="settings-heading">
           <div>
-            <span class="settings-kicker">字幕翻译</span>
-            <h2 id="aiSettingsTitle">翻译设置</h2>
+            <span class="settings-kicker">LANGUAGE TOOLS</span>
+            <h2 id="aiSettingsTitle">语言工具设置</h2>
           </div>
           <button class="settings-close" id="aiSettingsClose" type="button" aria-label="关闭翻译设置">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
           </button>
         </header>
-        <p class="settings-intro">可使用 Chrome 本地翻译，也可连接兼容 OpenAI 接口的模型服务。前者更私密，后者更擅长结合上下文。</p>
+        <p class="settings-intro">先设置日常查词偏好，再选择字幕翻译方式；AI 接口仅用于需要深度理解的增强功能。</p>
         <form id="aiSettingsForm" class="settings-form">
-          <fieldset class="engine-picker">
-            <legend>翻译方式</legend>
-            <label class="engine-option" id="chromeEngineOption">
-              <input id="translationEngineChrome" name="translationEngine" type="radio" value="chrome" />
-              <span class="engine-indicator" aria-hidden="true"></span>
-              <span class="engine-copy">
-                <b>Chrome 本地翻译 <em>推荐</em></b>
-                <small id="chromeTranslationStatus">正在检查浏览器支持情况…</small>
-              </span>
-            </label>
-            <label class="engine-option">
-              <input id="translationEngineApi" name="translationEngine" type="radio" value="api" />
-              <span class="engine-indicator" aria-hidden="true"></span>
-              <span class="engine-copy">
-                <b>自定义模型 API</b>
-                <small>连接兼容 OpenAI 接口的模型服务。</small>
-              </span>
-            </label>
-          </fieldset>
+          <section class="settings-section settings-section-preference" aria-labelledby="preferenceSettingsTitle">
+            <header class="settings-section-heading">
+              <span>01</span>
+              <div><h3 id="preferenceSettingsTitle">查词与发音</h3><p>每次点词时立即使用你的默认口音朗读。</p></div>
+              <em>日常偏好</em>
+            </header>
+            <fieldset class="pronunciation-picker">
+              <legend class="sr-only">查词自动发音</legend>
+              <div class="pronunciation-options">
+                <label><input id="pronunciationAccentUs" name="pronunciationAccent" type="radio" value="en-US" /><span><b>US</b> 美式发音</span></label>
+                <label><input id="pronunciationAccentUk" name="pronunciationAccent" type="radio" value="en-GB" /><span><b>UK</b> 英式发音</span></label>
+              </div>
+            </fieldset>
+          </section>
 
-          <div class="api-settings-fields" id="apiSettingsFields">
-            <div class="api-settings-heading">
-              <span>API 连接</span>
-              <small>用于内容简介、句子分析、API 翻译与 AI 语境查词</small>
+          <section class="settings-section" aria-labelledby="translationSettingsTitle">
+            <header class="settings-section-heading">
+              <span>02</span>
+              <div><h3 id="translationSettingsTitle">字幕翻译</h3><p>选择整篇字幕默认使用的翻译引擎。</p></div>
+              <em>核心功能</em>
+            </header>
+            <fieldset class="engine-picker">
+              <legend class="sr-only">翻译方式</legend>
+              <label class="engine-option" id="chromeEngineOption">
+                <input id="translationEngineChrome" name="translationEngine" type="radio" value="chrome" />
+                <span class="engine-indicator" aria-hidden="true"></span>
+                <span class="engine-copy">
+                  <b>Chrome 本地翻译 <em>推荐</em></b>
+                  <small id="chromeTranslationStatus">正在检查浏览器支持情况…</small>
+                </span>
+              </label>
+              <label class="engine-option">
+                <input id="translationEngineApi" name="translationEngine" type="radio" value="api" />
+                <span class="engine-indicator" aria-hidden="true"></span>
+                <span class="engine-copy">
+                  <b>自定义模型 API</b>
+                  <small>更适合需要上下文判断的字幕内容。</small>
+                </span>
+              </label>
+            </fieldset>
+          </section>
+
+          <section class="settings-section settings-section-ai" id="aiCapabilitySection" aria-labelledby="aiCapabilityTitle">
+            <header class="settings-section-heading">
+              <span>03</span>
+              <div><h3 id="aiCapabilityTitle">AI 增强能力</h3><p>为句子分析、内容简介和完整词典信息提供模型能力。</p></div>
+              <em id="aiRequirementBadge">按需配置</em>
+            </header>
+            <div class="ai-feature-list" aria-label="API 支持的功能"><span>句子分析</span><span>内容简介</span><span>语境查词</span><span>API 翻译</span></div>
+            <div class="api-settings-fields" id="apiSettingsFields">
+              <label>
+                <span>API 地址</span>
+                <input id="aiBaseUrl" name="baseUrl" type="url" autocomplete="url" placeholder="https://api.deepseek.com" />
+                <small>服务商基础地址，或完整的 <code>/chat/completions</code> 地址。</small>
+              </label>
+              <div class="api-field-row">
+                <label>
+                  <span>模型名称</span>
+                  <input id="aiModel" name="model" type="text" autocomplete="off" placeholder="deepseek-v4-flash" />
+                </label>
+                <label>
+                  <span>API 密钥</span>
+                  <input id="aiApiKey" name="apiKey" type="password" autocomplete="off" placeholder="粘贴 API 密钥" />
+                </label>
+              </div>
+              <small class="api-key-hint" id="aiKeyHint">已保存的密钥不会返回到浏览器。</small>
             </div>
-            <label>
-              <span>API 地址</span>
-              <input id="aiBaseUrl" name="baseUrl" type="url" autocomplete="url" placeholder="https://api.deepseek.com" />
-              <small>填写服务商基础地址，或完整的 <code>/chat/completions</code> 地址。</small>
-            </label>
-            <label>
-              <span>模型名称</span>
-              <input id="aiModel" name="model" type="text" autocomplete="off" placeholder="deepseek-v4-flash" />
-            </label>
-            <label>
-              <span>API 密钥</span>
-              <input id="aiApiKey" name="apiKey" type="password" autocomplete="off" placeholder="粘贴 API 密钥" />
-              <small id="aiKeyHint">已保存的密钥不会返回到浏览器。</small>
-            </label>
-          </div>
+          </section>
           <p class="settings-error" id="aiSettingsError" role="alert"></p>
           <div class="settings-footer">
             <span id="aiConfigStatus">正在检查翻译服务…</span>

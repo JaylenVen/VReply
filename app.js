@@ -4,6 +4,7 @@
   const DEFAULT_DURATION = 150;
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3];
   const TRANSLATION_ENGINE_KEY = "vreply:translation-engine";
+  const PRONUNCIATION_ACCENT_KEY = "vreply:pronunciation-accent";
 
   function initialTranslationEngine() {
     try {
@@ -13,6 +14,14 @@
       // Storage can be unavailable in privacy-focused browsing modes.
     }
     return "Translator" in self ? "chrome" : "api";
+  }
+
+  function initialPronunciationAccent() {
+    try {
+      return localStorage.getItem(PRONUNCIATION_ACCENT_KEY) === "en-GB" ? "en-GB" : "en-US";
+    } catch (_error) {
+      return "en-US";
+    }
   }
 
   const elements = {
@@ -33,9 +42,13 @@
     aiConfigStatus: document.getElementById("aiConfigStatus"),
     translationEngineChrome: document.getElementById("translationEngineChrome"),
     translationEngineApi: document.getElementById("translationEngineApi"),
+    pronunciationAccentUs: document.getElementById("pronunciationAccentUs"),
+    pronunciationAccentUk: document.getElementById("pronunciationAccentUk"),
     chromeEngineOption: document.getElementById("chromeEngineOption"),
     chromeTranslationStatus: document.getElementById("chromeTranslationStatus"),
     apiSettingsFields: document.getElementById("apiSettingsFields"),
+    aiCapabilitySection: document.getElementById("aiCapabilitySection"),
+    aiRequirementBadge: document.getElementById("aiRequirementBadge"),
     urlForm: document.getElementById("urlForm"),
     videoUrl: document.getElementById("videoUrl"),
     urlField: document.getElementById("urlField"),
@@ -107,16 +120,23 @@
     dictionaryTerm: document.getElementById("dictionaryTerm"),
     dictionaryMeta: document.getElementById("dictionaryMeta"),
     dictionaryStatus: document.getElementById("dictionaryStatus"),
+    dictionaryLoading: document.getElementById("dictionaryLoading"),
     dictionaryContent: document.getElementById("dictionaryContent"),
-    dictionaryMeaning: document.getElementById("dictionaryMeaning"),
-    dictionaryEnglishMeaning: document.getElementById("dictionaryEnglishMeaning"),
     dictionaryPronunciations: document.getElementById("dictionaryPronunciations"),
     dictionaryPronunciationUS: document.getElementById("dictionaryPronunciationUS"),
     dictionaryPronunciationUK: document.getElementById("dictionaryPronunciationUK"),
     dictionaryContext: document.getElementById("dictionaryContext"),
-    dictionaryExampleBlock: document.getElementById("dictionaryExampleBlock"),
-    dictionaryExample: document.getElementById("dictionaryExample"),
-    dictionaryExampleTranslation: document.getElementById("dictionaryExampleTranslation"),
+    dictionarySenses: document.getElementById("dictionarySenses"),
+    dictionaryWordFormsBlock: document.getElementById("dictionaryWordFormsBlock"),
+    dictionaryWordForms: document.getElementById("dictionaryWordForms"),
+    dictionaryEtymologyBlock: document.getElementById("dictionaryEtymologyBlock"),
+    dictionaryEtymology: document.getElementById("dictionaryEtymology"),
+    dictionaryPhrasesBlock: document.getElementById("dictionaryPhrasesBlock"),
+    dictionaryPhrases: document.getElementById("dictionaryPhrases"),
+    dictionarySynonymsBlock: document.getElementById("dictionarySynonymsBlock"),
+    dictionarySynonyms: document.getElementById("dictionarySynonyms"),
+    dictionaryWordFamilyBlock: document.getElementById("dictionaryWordFamilyBlock"),
+    dictionaryWordFamily: document.getElementById("dictionaryWordFamily"),
     toast: document.getElementById("toast"),
     toastTitle: document.getElementById("toastTitle"),
     toastText: document.getElementById("toastText"),
@@ -148,6 +168,7 @@
     languageAvailable: false,
     llmConfig: null,
     translationEngine: initialTranslationEngine(),
+    pronunciationAccent: initialPronunciationAccent(),
     chromeTranslationAvailability: "checking",
     chromeTranslator: null,
     chromeTranslatorPromise: null,
@@ -165,6 +186,8 @@
     dictionaryCache: new Map(),
     dictionaryController: null,
     dictionaryRequestId: 0,
+    studyOverlay: null,
+    resumeAfterStudy: false,
     analysisCache: new Map(),
     analysisController: null,
     analysisRequestId: 0,
@@ -262,8 +285,8 @@
     setPlaying(false);
     cleanupPlayer();
     closeTuningPopovers();
-    closeDictionary();
-    closeSentenceAnalysis();
+    closeDictionary({ resume: false });
+    closeSentenceAnalysis({ resume: false });
     setPanelView("transcript");
     resetSummaryView();
     updateTranslationToggle();
@@ -671,6 +694,52 @@
     elements.playButton.dataset.controlTooltip = state.playing ? "暂停" : "播放";
   }
 
+  function pausePlayback() {
+    if (state.playerKind === "youtube" && state.playerReady && state.ytPlayer) {
+      state.ytPlayer.pauseVideo();
+    } else if (state.playerKind === "direct" && state.playerReady && state.directPlayer) {
+      state.directPlayer.pause();
+    }
+    setPlaying(false);
+  }
+
+  function resumePlayback() {
+    if (!state.source || !state.transcript.length) return;
+    if (state.playerKind === "youtube" && state.playerReady && state.ytPlayer) {
+      state.ytPlayer.playVideo();
+      setPlaying(true);
+    } else if (state.playerKind === "direct" && state.playerReady && state.directPlayer) {
+      state.directPlayer.play().catch(handlePlayerError);
+      setPlaying(true);
+    } else {
+      state.simulatedPlayback = true;
+      state.lastTickAt = performance.now();
+      setPlaying(true);
+    }
+  }
+
+  function beginStudyOverlay(type) {
+    if (!state.studyOverlay) {
+      state.resumeAfterStudy = state.playing;
+      pausePlayback();
+    }
+    state.studyOverlay = type;
+  }
+
+  function endStudyOverlay(type, options) {
+    if (state.studyOverlay !== type) return;
+    if (options && options.preserveStudySession) return;
+    const shouldResume = state.resumeAfterStudy && !(options && options.resume === false);
+    state.studyOverlay = null;
+    state.resumeAfterStudy = false;
+    if (shouldResume) resumePlayback();
+  }
+
+  function closeStudyOverlayForPlayback() {
+    if (!elements.dictionaryCard.classList.contains("is-hidden")) closeDictionary({ resume: false });
+    if (!elements.analysisCard.classList.contains("is-hidden")) closeSentenceAnalysis({ resume: false });
+  }
+
   function seekTo(value, options) {
     const config = options || {};
     const nextTime = Math.max(0, Math.min(Number(value) || 0, state.duration || 0));
@@ -813,6 +882,14 @@
         span.dataset.word = String(index);
         span.dataset.start = String(word.start);
         span.dataset.end = String(word.end);
+        const selection = String(word.text || "").match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/u)?.[0] || "";
+        if (selection) {
+          span.dataset.selection = selection;
+          span.dataset.index = String(state.activeIndex);
+          span.tabIndex = 0;
+          span.setAttribute("role", "button");
+          span.setAttribute("aria-label", `查询 ${selection} 的释义`);
+        }
         span.textContent = index === words.length - 1 ? word.text : `${word.text} `;
         elements.captionText.appendChild(span);
       });
@@ -1083,6 +1160,11 @@
     );
     elements.chromeTranslationStatus.textContent = chromeAvailabilityText();
     elements.apiSettingsFields.classList.toggle("is-secondary", engine !== "api");
+    elements.aiCapabilitySection.classList.toggle("is-required", engine === "api");
+    elements.aiCapabilitySection.classList.toggle("is-configured", state.languageAvailable);
+    elements.aiRequirementBadge.textContent = state.languageAvailable
+      ? "已连接"
+      : engine === "api" ? "翻译必需" : "按需配置";
     elements.aiBaseUrl.required = engine === "api";
     elements.aiModel.required = engine === "api";
   }
@@ -1460,6 +1542,8 @@
     elements.aiBaseUrl.value = config.baseUrl || "https://api.deepseek.com";
     elements.aiModel.value = config.model || "deepseek-v4-flash";
     elements.aiApiKey.value = "";
+    elements.pronunciationAccentUs.checked = state.pronunciationAccent === "en-US";
+    elements.pronunciationAccentUk.checked = state.pronunciationAccent === "en-GB";
     elements.aiSettingsError.textContent = "";
     syncTranslationSettingsForm();
     elements.aiConfigStatus.textContent = state.translationEngine === "chrome"
@@ -1485,12 +1569,14 @@
   async function saveAiSettings(event) {
     event.preventDefault();
     const engine = elements.translationEngineChrome.checked ? "chrome" : "api";
+    const pronunciationAccent = elements.pronunciationAccentUk.checked ? "en-GB" : "en-US";
     const config = state.llmConfig || {};
     const apiKey = elements.aiApiKey.value.trim();
     const sameExistingConfig = state.languageAvailable
       && elements.aiBaseUrl.value.trim() === String(config.baseUrl || "")
       && elements.aiModel.value.trim() === String(config.model || "");
-    const shouldSaveApi = engine === "api" || Boolean(apiKey);
+    const shouldSaveApi = Boolean(apiKey)
+      || (engine === "api" && (state.languageAvailable || state.translationEngine !== engine));
     let apiConfigUpdated = false;
     elements.aiSettingsError.textContent = "";
     elements.aiSettingsSave.disabled = true;
@@ -1527,6 +1613,12 @@
       } else {
         setTranslationEngine("api");
       }
+      state.pronunciationAccent = pronunciationAccent;
+      try {
+        localStorage.setItem(PRONUNCIATION_ACCENT_KEY, pronunciationAccent);
+      } catch (_error) {
+        // The preference still applies for the current session when storage is unavailable.
+      }
 
       if (apiConfigUpdated) {
         if (state.summaryController) state.summaryController.abort();
@@ -1542,7 +1634,9 @@
           ? state.languageAvailable
             ? `字幕继续使用 Chrome；内容简介将使用 ${state.llmConfig.model}。`
             : "字幕将在当前设备上完成翻译。"
-          : `未完成的字幕将通过 ${state.llmConfig.model} 继续翻译。`
+          : state.languageAvailable
+            ? `未完成的字幕将通过 ${state.llmConfig.model} 继续翻译。`
+            : `已默认使用${pronunciationAccent === "en-GB" ? "英式" : "美式"}发音；模型 API 尚未配置。`
       );
       if (apiConfigUpdated && state.panelView === "summary") loadAiSummary();
     } catch (error) {
@@ -1568,16 +1662,23 @@
   }
 
   function openDictionary(selection) {
+    if (!elements.analysisCard.classList.contains("is-hidden")) {
+      closeSentenceAnalysis({ preserveStudySession: true });
+    }
+    beginStudyOverlay("dictionary");
     elements.dictionaryCard.classList.remove("is-hidden");
     elements.dictionaryCard.setAttribute("aria-busy", "true");
+    elements.dictionaryCard.scrollTop = 0;
     elements.dictionaryTerm.textContent = selection;
     elements.dictionaryMeta.textContent = "";
-    elements.dictionaryStatus.textContent = "正在读取当前语境…";
+    elements.dictionaryLoading.classList.remove("is-hidden");
+    elements.dictionaryStatus.textContent = "词典释义加载中";
+    elements.dictionaryStatus.classList.add("sr-only");
     elements.dictionaryStatus.classList.remove("is-error");
     elements.dictionaryContent.classList.add("is-hidden");
   }
 
-  function closeDictionary() {
+  function closeDictionary(options) {
     state.dictionaryRequestId += 1;
     elements.dictionaryCard.classList.add("is-hidden");
     elements.dictionaryCard.removeAttribute("aria-busy");
@@ -1585,13 +1686,66 @@
     state.dictionaryController = null;
     const selection = window.getSelection();
     if (selection && !selection.isCollapsed) selection.removeAllRanges();
+    endStudyOverlay("dictionary", options);
   }
 
   function showDictionaryError(message) {
     elements.dictionaryCard.setAttribute("aria-busy", "false");
+    elements.dictionaryLoading.classList.add("is-hidden");
     elements.dictionaryStatus.textContent = message;
+    elements.dictionaryStatus.classList.remove("sr-only");
     elements.dictionaryStatus.classList.add("is-error");
     elements.dictionaryContent.classList.add("is-hidden");
+  }
+
+  function dictionarySenseElement(sense) {
+    const section = document.createElement("section");
+    section.className = "dictionary-sense";
+    const heading = document.createElement("span");
+    heading.textContent = sense.partOfSpeech || "常用释义";
+    const meaning = document.createElement("p");
+    meaning.className = "dictionary-sense-meaning";
+    meaning.textContent = sense.meaning || "";
+    const english = document.createElement("p");
+    english.className = "dictionary-sense-english";
+    english.textContent = sense.englishDefinition || "";
+    section.append(heading, meaning, english);
+    if (sense.example || sense.exampleTranslation) {
+      const example = document.createElement("div");
+      example.className = "dictionary-sense-example";
+      const sentence = document.createElement("p");
+      sentence.textContent = sense.example || "";
+      const translation = document.createElement("small");
+      translation.textContent = sense.exampleTranslation || "";
+      example.append(sentence, translation);
+      section.appendChild(example);
+    }
+    return section;
+  }
+
+  function renderDictionaryChips(container, values, valueForItem) {
+    const items = Array.isArray(values) ? values.filter(Boolean) : [];
+    container.replaceChildren(...items.map((item) => {
+      const chip = document.createElement("span");
+      const value = valueForItem ? valueForItem(item) : String(item);
+      chip.textContent = value;
+      return chip;
+    }));
+    return items.length > 0;
+  }
+
+  function renderDictionaryDetailList(container, values, titleKey, detailKey) {
+    const items = Array.isArray(values) ? values.filter(Boolean) : [];
+    container.replaceChildren(...items.map((item) => {
+      const row = document.createElement("p");
+      const title = document.createElement("b");
+      title.textContent = String(item[titleKey] || "");
+      const detail = String(item[detailKey] || "");
+      row.append(title);
+      if (detail) row.append(document.createTextNode(` — ${detail}`));
+      return row;
+    }));
+    return items.length > 0;
   }
 
   function renderDictionaryEntry(entry) {
@@ -1600,17 +1754,40 @@
     const fallbackPronunciation = entry.pronunciation || "";
     elements.dictionaryPronunciationUS.textContent = entry.pronunciationUS || fallbackPronunciation;
     elements.dictionaryPronunciationUK.textContent = entry.pronunciationUK || fallbackPronunciation;
-    elements.dictionaryMeaning.textContent = entry.meaning;
-    elements.dictionaryEnglishMeaning.textContent = entry.englishMeaning || "";
     elements.dictionaryContext.textContent = entry.source === "local" ? "" : entry.contextMeaning;
-    elements.dictionaryExample.textContent = entry.example;
-    elements.dictionaryExampleTranslation.textContent = entry.exampleTranslation;
-    elements.dictionaryExampleBlock.classList.toggle(
+    const senses = Array.isArray(entry.senses) && entry.senses.length
+      ? entry.senses
+      : [{
+          partOfSpeech: entry.partOfSpeech,
+          meaning: entry.meaning,
+          englishDefinition: entry.englishMeaning,
+          example: entry.example,
+          exampleTranslation: entry.exampleTranslation,
+        }];
+    elements.dictionarySenses.replaceChildren(...senses.map(dictionarySenseElement));
+
+    const hasForms = renderDictionaryChips(elements.dictionaryWordForms, entry.wordForms, (item) => (
+      `${item.label || "词形"} · ${item.word || ""}`
+    ));
+    elements.dictionaryWordFormsBlock.classList.toggle("is-hidden", !hasForms);
+    elements.dictionaryEtymology.textContent = entry.etymology || "";
+    elements.dictionaryEtymologyBlock.classList.toggle("is-hidden", !String(entry.etymology || "").trim());
+    elements.dictionaryPhrasesBlock.classList.toggle(
       "is-hidden",
-      !String(entry.example || "").trim() && !String(entry.exampleTranslation || "").trim()
+      !renderDictionaryDetailList(elements.dictionaryPhrases, entry.phrases, "phrase", "meaning")
+    );
+    elements.dictionarySynonymsBlock.classList.toggle(
+      "is-hidden",
+      !renderDictionaryChips(elements.dictionarySynonyms, entry.synonyms)
+    );
+    elements.dictionaryWordFamilyBlock.classList.toggle(
+      "is-hidden",
+      !renderDictionaryDetailList(elements.dictionaryWordFamily, entry.wordFamily, "word", "meaning")
     );
     elements.dictionaryStatus.textContent = "";
+    elements.dictionaryStatus.classList.add("sr-only");
     elements.dictionaryStatus.classList.remove("is-error");
+    elements.dictionaryLoading.classList.add("is-hidden");
     elements.dictionaryContent.classList.remove("is-hidden");
     elements.dictionaryCard.setAttribute("aria-busy", "false");
   }
@@ -1622,6 +1799,7 @@
     if (state.dictionaryController) state.dictionaryController.abort();
     state.dictionaryController = null;
     openDictionary(selection);
+    speakDictionaryTerm(state.pronunciationAccent, selection);
     if (!state.transcriptId) {
       showDictionaryError("当前字幕已失效，请重新导入视频。");
       return;
@@ -1763,13 +1941,13 @@
     }
   }
 
-  function speakDictionaryTerm(accent) {
+  function speakDictionaryTerm(accent, term) {
     if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
       showToast("当前浏览器无法播放发音", "你仍可参考卡片中的音标。");
       return;
     }
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(elements.dictionaryTerm.textContent.trim());
+    const utterance = new SpeechSynthesisUtterance(String(term || elements.dictionaryTerm.textContent).trim());
     utterance.lang = accent;
     utterance.rate = 0.86;
     const voice = window.speechSynthesis.getVoices().find((candidate) => candidate.lang === accent);
@@ -1777,12 +1955,13 @@
     window.speechSynthesis.speak(utterance);
   }
 
-  function closeSentenceAnalysis() {
+  function closeSentenceAnalysis(options) {
     state.analysisRequestId += 1;
     elements.analysisCard.classList.add("is-hidden");
     elements.analysisButton.setAttribute("aria-expanded", "false");
     if (state.analysisController) state.analysisController.abort();
     state.analysisController = null;
+    endStudyOverlay("analysis", options);
   }
 
   function analysisParagraph(label, text) {
@@ -1832,6 +2011,10 @@
       return;
     }
 
+    if (!elements.dictionaryCard.classList.contains("is-hidden")) {
+      closeDictionary({ preserveStudySession: true });
+    }
+    beginStudyOverlay("analysis");
     const requestId = ++state.analysisRequestId;
     elements.analysisSentence.textContent = segment.text;
     elements.analysisStatus.textContent = "正在拆解语法、句式与朗读节奏…";
@@ -1957,8 +2140,8 @@
     if (state.translationTimer) window.clearTimeout(state.translationTimer);
     state.translationTimer = null;
     if (state.translationObserver) state.translationObserver.disconnect();
-    closeDictionary();
-    closeSentenceAnalysis();
+    closeDictionary({ resume: false });
+    closeSentenceAnalysis({ resume: false });
     setPanelView("transcript");
     resetSummaryView();
     updateTranslationToggle();
@@ -2066,10 +2249,27 @@
     if (!elements.workspaceView.classList.contains("is-hidden")) returnHome();
   });
   elements.newVideoButton.addEventListener("click", returnHome);
-  elements.playButton.addEventListener("click", togglePlay);
-  elements.videoStage.addEventListener("click", (event) => {
-    if (event.target.closest(".extract-overlay") || !state.interactiveReady) return;
+  elements.playButton.addEventListener("click", () => {
+    closeStudyOverlayForPlayback();
     togglePlay();
+  });
+  elements.videoStage.addEventListener("click", (event) => {
+    if (event.target.closest(".extract-overlay, .caption-word") || !state.interactiveReady) return;
+    closeStudyOverlayForPlayback();
+    togglePlay();
+  });
+  elements.captionText.addEventListener("click", (event) => {
+    const word = event.target.closest(".caption-word[data-selection]");
+    if (!word) return;
+    event.stopPropagation();
+    lookupDefinition(word.dataset.selection, Number(word.dataset.index));
+  });
+  elements.captionText.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const word = event.target.closest(".caption-word[data-selection]");
+    if (!word) return;
+    event.preventDefault();
+    lookupDefinition(word.dataset.selection, Number(word.dataset.index));
   });
   elements.rewindButton.addEventListener("click", () => jumpSentence(-1));
   elements.forwardButton.addEventListener("click", () => jumpSentence(1));
@@ -2189,7 +2389,13 @@
     if (
       !elements.dictionaryCard.classList.contains("is-hidden")
       && !event.target.closest("#dictionaryCard")
+      && !event.target.closest(".line-word, .caption-word, #analysisButton, #playButton, #videoStage")
     ) closeDictionary();
+    if (
+      !elements.analysisCard.classList.contains("is-hidden")
+      && !event.target.closest("#analysisCard")
+      && !event.target.closest("#analysisButton, .line-word, .caption-word, #playButton, #videoStage")
+    ) closeSentenceAnalysis();
   });
 
   setPlaybackSpeed(SPEEDS.indexOf(state.speed));
