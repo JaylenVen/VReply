@@ -1,18 +1,18 @@
 :root {
-  --canvas: #090b0a;
-  --canvas-deep: #0e110f;
-  --paper: #131714;
-  --paper-strong: #1a201b;
-  --ink: #f4f6f1;
-  --ink-soft: #d0d6cd;
-  --muted: #9aa39a;
+  --canvas: #090a09;
+  --canvas-deep: #100f0d;
+  --paper: #171612;
+  --paper-strong: #211e18;
+  --ink: #f6f3ec;
+  --ink-soft: #d6d1c7;
+  --muted: #a39d91;
   --line: rgba(255, 255, 255, 0.11);
   --line-light: rgba(255, 255, 255, 0.16);
-  --night: #0d100e;
-  --night-soft: #181d19;
-  --accent-rgb: 185, 223, 114;
-  --acid: #b9df72;
-  --acid-deep: #8eaa59;
+  --night: #100f0d;
+  --night-soft: #1d1a15;
+  --accent-rgb: 221, 178, 91;
+  --acid: #ddb25b;
+  --acid-deep: #b98c3e;
   --warm: #e7a477;
   --shadow: 0 28px 70px rgba(0, 0, 0, 0.34);
   --radius-xl: 28px;
@@ -51,8 +51,8 @@ body {
   margin: 0;
   overflow-x: hidden;
   background:
-    radial-gradient(circle at 10% 0%, rgba(87, 112, 78, 0.14), transparent 31%),
-    radial-gradient(circle at 92% 100%, rgba(118, 83, 57, 0.1), transparent 34%),
+    radial-gradient(circle at 10% 0%, rgba(137, 103, 51, 0.14), transparent 31%),
+    radial-gradient(circle at 92% 100%, rgba(91, 69, 42, 0.1), transparent 34%),
     var(--canvas);
   color: var(--ink);
   font-family: var(--font-sans);
@@ -135,9 +135,9 @@ svg {
   overflow: hidden;
   border-radius: 11px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #171d18;
+  background: #1b1812;
   color: var(--ink);
-  box-shadow: 0 8px 18px rgba(21, 24, 21, 0.18);
+  box-shadow: 0 8px 18px rgba(24, 20, 13, 0.22);
   font-family: var(--font-serif);
   font-size: 23px;
   font-style: italic;
@@ -380,7 +380,7 @@ svg {
 }
 
 .url-field input::placeholder {
-  color: #646d65;
+  color: #706a5e;
 }
 
 .submit-button {
@@ -393,7 +393,7 @@ svg {
   border: 0;
   border-radius: 12px;
   background: var(--acid);
-  color: #11150f;
+  color: #17130b;
   font-size: 13px;
   font-weight: 640;
   cursor: pointer;
@@ -401,8 +401,8 @@ svg {
 }
 
 .submit-button:hover {
-  background: #d8ed9d;
-  color: #11150f;
+  background: #edca7f;
+  color: #17130b;
   transform: translateX(1px);
 }
 
@@ -2386,7 +2386,7 @@ svg {
 
 .settings-save:hover {
   transform: translateY(-1px);
-  background: #d8ed9d;
+  background: #edca7f;
 }
 
 .settings-save:disabled {
@@ -3997,9 +3997,6 @@ body.workspace-active .app-main {
 /* Cinema workspace refinement */
 
 body.workspace-active {
-  --accent-rgb: 221, 178, 91;
-  --acid: #ddb25b;
-  --acid-deep: #b98c3e;
   --font-sans: "Aptos", "Segoe UI Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
   background:
