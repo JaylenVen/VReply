@@ -13,10 +13,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=Inter:wght@400;500;600;700&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;family=Noto+Serif+SC:wght@400;600&amp;family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&amp;display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=Inter:wght@400;500;600;700&amp;family=Ma+Shan+Zheng&amp;family=Manrope:wght@400;500;600&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;family=Noto+Serif+SC:wght@400;600&amp;family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&amp;family=ZCOOL+XiaoWei&amp;display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260713-settings" />
+    <link rel="stylesheet" href="styles.css?v=20260714-settings-polish" />
   </head>
   <body>
     <div class="page-noise" aria-hidden="true"></div>
@@ -179,7 +179,6 @@
 
               <button class="loop-button" id="loopButton" type="button" aria-label="循环当前句" aria-pressed="false" data-control-tooltip="循环当前句">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a4 4 0 0 1 4 4M17 4l3 3-3 3M17 17H7a4 4 0 0 1-4-4M7 20l-3-3 3-3" /></svg>
-                <span>单句循环</span>
               </button>
 
               <div class="timeline-group">
@@ -413,37 +412,68 @@
                       <button id="subtitleScaleUp" type="button" aria-label="增大字幕字号">＋</button>
                     </div>
                   </div>
-                  <label class="subtitle-setting-row" for="subtitleOriginalFont">
+                  <div class="subtitle-setting-row">
                     <div><b>原文字体</b></div>
-                    <span class="settings-select-wrap">
-                      <select id="subtitleOriginalFont" name="subtitleOriginalFont">
-                        <option value="inter">Inter</option>
-                        <option value="helvetica-neue">Helvetica Neue</option>
-                        <option value="roboto">Roboto</option>
-                        <option value="arial">Arial</option>
-                        <option value="sf-pro-display">SF Pro Display</option>
-                        <option value="segoe-ui">Segoe UI</option>
+                    <div class="font-select" data-font-select>
+                      <select id="subtitleOriginalFont" name="subtitleOriginalFont" hidden>
+                        <optgroup label="简约">
+                          <option value="inter" data-description="现代中性">Inter</option>
+                          <option value="helvetica-neue" data-description="经典克制">Helvetica Neue</option>
+                          <option value="sf-pro-display" data-description="精密清晰">SF Pro Display</option>
+                          <option value="segoe-ui" data-description="自然易读">Segoe UI</option>
+                          <option value="ibm-plex-sans" data-description="理性编辑感">IBM Plex Sans</option>
+                          <option value="manrope" data-description="几何轻奢">Manrope</option>
+                        </optgroup>
+                        <optgroup label="艺术">
+                          <option value="source-serif-4" data-description="人文书刊感">Source Serif 4</option>
+                          <option value="cormorant-garamond" data-description="优雅高对比">Cormorant Garamond</option>
+                        </optgroup>
                       </select>
-                    </span>
-                  </label>
-                  <label class="subtitle-setting-row" for="subtitleTranslationFont">
+                      <button class="font-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                        <span><b data-font-current>Inter</b><small data-font-description>现代中性</small></span>
+                        <i aria-hidden="true"></i>
+                      </button>
+                      <div class="font-select-popover is-hidden" role="listbox" aria-label="选择原文字体"></div>
+                    </div>
+                  </div>
+                  <div class="subtitle-setting-row">
                     <div><b>翻译字体</b></div>
-                    <span class="settings-select-wrap">
-                      <select id="subtitleTranslationFont" name="subtitleTranslationFont">
-                        <option value="source-han-sans">Source Han Sans</option>
-                        <option value="noto-sans-cjk-sc">Noto Sans CJK SC</option>
-                        <option value="pingfang-sc">PingFang SC</option>
-                        <option value="harmonyos-sans">HarmonyOS Sans</option>
+                    <div class="font-select" data-font-select>
+                      <select id="subtitleTranslationFont" name="subtitleTranslationFont" hidden>
+                        <optgroup label="简约">
+                          <option value="source-han-sans" data-description="简洁稳重">思源黑体</option>
+                          <option value="pingfang-sc" data-description="轻盈精致">苹方</option>
+                          <option value="microsoft-yahei" data-description="清晰耐读">微软雅黑</option>
+                          <option value="dengxian" data-description="纤细现代">等线</option>
+                        </optgroup>
+                        <optgroup label="艺术">
+                          <option value="noto-serif-sc" data-description="典雅宋体">思源宋体</option>
+                          <option value="zcool-xiaowei" data-description="复古刊物感">站酷小薇体</option>
+                          <option value="ma-shan-zheng" data-description="手写书法感">马善政毛笔楷书</option>
+                        </optgroup>
                       </select>
-                    </span>
-                  </label>
+                      <button class="font-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                        <span><b data-font-current>思源黑体</b><small data-font-description>简洁稳重</small></span>
+                        <i aria-hidden="true"></i>
+                      </button>
+                      <div class="font-select-popover is-hidden" role="listbox" aria-label="选择翻译字体"></div>
+                    </div>
+                  </div>
                   <div class="subtitle-setting-row">
                     <div><b>翻译颜色</b></div>
                     <div class="subtitle-color-options" id="subtitleColorOptions" aria-label="翻译颜色">
                       <button type="button" data-subtitle-color="#d8d1c3" style="--swatch: #d8d1c3" aria-label="暖灰"></button>
                       <button type="button" data-subtitle-color="#f0c978" style="--swatch: #f0c978" aria-label="暖金"></button>
                       <button type="button" data-subtitle-color="#bdd6cd" style="--swatch: #bdd6cd" aria-label="雾绿"></button>
-                      <label class="custom-color" aria-label="自定义翻译颜色"><input id="subtitleTranslationColor" name="subtitleTranslationColor" type="color" value="#d8d1c3" /></label>
+                      <div class="custom-color-picker">
+                        <button class="custom-color" id="customColorButton" type="button" aria-label="自定义翻译颜色" aria-haspopup="dialog" aria-expanded="false"><i aria-hidden="true"></i></button>
+                        <div class="color-picker-popover is-hidden" id="subtitleColorPicker" role="dialog" aria-label="自定义翻译颜色">
+                          <div class="color-picker-heading"><b>自定义颜色</b><button id="colorPickerClose" type="button" aria-label="关闭调色盘">×</button></div>
+                          <div class="color-saturation" id="colorSaturation" tabindex="0" aria-label="饱和度与明度"><i id="colorSaturationCursor" aria-hidden="true"></i></div>
+                          <label class="color-hue"><span>色相</span><input id="colorHue" type="range" min="0" max="360" value="40" aria-label="色相" /></label>
+                          <label class="color-hex"><i id="colorPreview" aria-hidden="true"></i><input id="subtitleTranslationColor" name="subtitleTranslationColor" type="text" value="#d8d1c3" maxlength="7" spellcheck="false" aria-label="十六进制颜色" /></label>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <label class="subtitle-setting-row" for="subtitleOpacity">
@@ -553,6 +583,6 @@
     <script>
       window.VREPLY_TRANSCRIBE_ENDPOINT = "/api/transcribe";
     </script>
-    <script src="app.js?v=20260712-control-polish"></script>
+    <script src="app.js?v=20260714-settings-polish"></script>
   </body>
 </html>

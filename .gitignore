@@ -1,2 +1,8 @@
+# Python caches and local environments
 __pycache__/
 *.py[cod]
+.venv/
+
+# Local secrets and visual QA artifacts
+.env
+design-qa-*.png

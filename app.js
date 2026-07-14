@@ -17,18 +17,23 @@
     bold: false,
   });
   const ORIGINAL_FONTS = Object.freeze({
-    inter: '"Inter", "Helvetica Neue", Arial, sans-serif',
-    "helvetica-neue": '"Helvetica Neue", Helvetica, Arial, sans-serif',
-    roboto: '"Roboto", "Helvetica Neue", Arial, sans-serif',
-    arial: 'Arial, Helvetica, sans-serif',
+    inter: '"Inter", "Helvetica Neue", sans-serif',
+    "helvetica-neue": '"Helvetica Neue", Helvetica, sans-serif',
     "sf-pro-display": '"SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif',
-    "segoe-ui": '"Segoe UI", "Helvetica Neue", Arial, sans-serif',
+    "segoe-ui": '"Segoe UI", "Helvetica Neue", sans-serif',
+    "ibm-plex-sans": '"IBM Plex Sans", "Helvetica Neue", sans-serif',
+    manrope: '"Manrope", "Helvetica Neue", sans-serif',
+    "source-serif-4": '"Source Serif 4", Georgia, serif',
+    "cormorant-garamond": '"Cormorant Garamond", Georgia, serif',
   });
   const TRANSLATION_FONTS = Object.freeze({
-    "source-han-sans": '"Source Han Sans SC", "Noto Sans CJK SC", "Noto Sans SC", sans-serif',
-    "noto-sans-cjk-sc": '"Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", sans-serif',
+    "source-han-sans": '"Source Han Sans SC", "Source Han Sans CN", "Noto Sans SC", sans-serif',
     "pingfang-sc": '"PingFang SC", "Microsoft YaHei", sans-serif',
-    "harmonyos-sans": '"HarmonyOS Sans SC", "HarmonyOS Sans", "Noto Sans SC", sans-serif',
+    "microsoft-yahei": '"Microsoft YaHei", "Noto Sans SC", sans-serif',
+    dengxian: 'DengXian, "Microsoft YaHei", sans-serif',
+    "noto-serif-sc": '"Noto Serif SC", "Source Han Serif SC", SimSun, serif',
+    "zcool-xiaowei": '"ZCOOL XiaoWei", "Noto Serif SC", SimSun, serif',
+    "ma-shan-zheng": '"Ma Shan Zheng", STKaiti, KaiTi, cursive',
   });
   const COMMON_PHRASES = new Map(Object.entries({
     "a little bit": ["一点；稍微", "to a small degree"],
@@ -159,6 +164,12 @@
     subtitleTranslationFont: document.getElementById("subtitleTranslationFont"),
     subtitleTranslationColor: document.getElementById("subtitleTranslationColor"),
     subtitleColorOptions: document.getElementById("subtitleColorOptions"),
+    customColorButton: document.getElementById("customColorButton"),
+    subtitleColorPicker: document.getElementById("subtitleColorPicker"),
+    colorPickerClose: document.getElementById("colorPickerClose"),
+    colorSaturation: document.getElementById("colorSaturation"),
+    colorHue: document.getElementById("colorHue"),
+    colorPreview: document.getElementById("colorPreview"),
     subtitleOpacity: document.getElementById("subtitleOpacity"),
     subtitleOpacityValue: document.getElementById("subtitleOpacityValue"),
     subtitleBold: document.getElementById("subtitleBold"),
@@ -344,6 +355,8 @@
   };
 
   let youTubeApiPromise = null;
+  let colorPickerHsv = { h: 40, s: 0.13, v: 0.85 };
+  let colorPickerDragging = false;
 
   function userMessage(value, fallback) {
     const text = String(value || "").trim();
@@ -388,6 +401,52 @@
     };
   }
 
+  function setImportBusy(busy) {
+    const label = elements.submitButton.querySelector("span");
+    elements.urlForm.toggleAttribute("aria-busy", busy);
+    elements.submitButton.disabled = busy;
+    elements.submitButton.setAttribute("aria-label", busy ? "正在打开视频" : "导入视频");
+    if (label) label.textContent = busy ? "打开中" : "导入";
+  }
+
+  function syncAppViewportHeight() {
+    const candidates = [
+      window.innerHeight,
+      window.visualViewport?.height,
+      window.screen?.availHeight,
+    ].filter((value) => Number.isFinite(value) && value > 0);
+    const viewportHeight = Math.max(560, Math.floor(Math.min(...candidates)));
+    document.documentElement.style.setProperty("--app-viewport-height", `${viewportHeight}px`);
+  }
+
+  function showWorkspace(reducedMotion) {
+    const swapViews = () => {
+      document.body.classList.add("workspace-active");
+      elements.landingView.classList.add("is-hidden");
+      elements.workspaceView.classList.remove("is-hidden");
+      document.body.classList.remove("import-committing", "door-opening");
+      setImportBusy(false);
+      elements.aiSettingsButton.classList.remove("is-hidden");
+      elements.newVideoButton.classList.remove("is-hidden");
+    };
+
+    if (!reducedMotion && typeof document.startViewTransition === "function") {
+      document.documentElement.classList.add("workspace-view-transition");
+      const transition = document.startViewTransition(swapViews);
+      const finishTransition = () => {
+        document.documentElement.classList.remove("workspace-view-transition");
+      };
+      transition.finished.then(finishTransition, finishTransition);
+      return;
+    }
+
+    document.body.classList.add("workspace-entering");
+    swapViews();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => document.body.classList.remove("workspace-entering"));
+    });
+  }
+
   async function startImport(rawUrl) {
     const source = parseVideoUrl(rawUrl);
     if (source.error) {
@@ -396,14 +455,16 @@
     }
 
     clearFieldError();
-    if (document.body.classList.contains("door-opening")) return;
+    if (document.body.classList.contains("import-committing")) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    setImportBusy(true);
+    document.body.classList.add("import-committing");
+    await delay(reducedMotion ? 30 : 110);
+    if (!document.body.classList.contains("import-committing")) return;
     document.body.classList.add("door-opening");
-    elements.urlForm.setAttribute("aria-busy", "true");
-    elements.submitButton.disabled = true;
-    await delay(window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 80 : 1000);
+    await delay(reducedMotion ? 50 : 1080);
     if (!document.body.classList.contains("door-opening")) return;
 
-    document.body.classList.add("workspace-active");
     const token = ++state.loadToken;
     state.source = source;
     state.transcript = [];
@@ -449,13 +510,7 @@
     resetSummaryView();
     updateTranslationToggle();
 
-    elements.landingView.classList.add("is-hidden");
-    elements.workspaceView.classList.remove("is-hidden");
-    document.body.classList.remove("door-opening");
-    elements.urlForm.removeAttribute("aria-busy");
-    elements.submitButton.disabled = false;
-    elements.aiSettingsButton.classList.remove("is-hidden");
-    elements.newVideoButton.classList.remove("is-hidden");
+    showWorkspace(reducedMotion);
     elements.transcriptSkeleton.classList.remove("is-hidden");
     elements.transcriptList.replaceChildren();
     elements.transcriptEmpty.classList.add("is-hidden");
@@ -1284,8 +1339,9 @@
     if (!state.interactiveReady || !state.transcriptId || state.summaryLoading) return;
     if (state.summaryTranscriptId === state.transcriptId) return;
     if (!state.languageAvailable) {
-      showSummaryError("请先在“设置”的“AI 能力”中配置模型，然后重新生成内容简介。");
-      elements.summaryRetryButton.textContent = "配置 API";
+      showSummaryError("配置 AI 模型后即可生成。");
+      elements.summaryTitle.textContent = "尚未配置模型";
+      elements.summaryRetryButton.textContent = "去配置";
       return;
     }
 
@@ -1818,6 +1874,139 @@
     if (state.transcript.length) renderTranscript(elements.transcriptSearch.value);
   }
 
+  function fontFamilyForSelect(select, value) {
+    return select === elements.subtitleOriginalFont ? ORIGINAL_FONTS[value] : TRANSLATION_FONTS[value];
+  }
+
+  function closeFontSelects(except) {
+    document.querySelectorAll("[data-font-select]").forEach((wrapper) => {
+      if (wrapper === except) return;
+      wrapper.querySelector(".font-select-trigger").setAttribute("aria-expanded", "false");
+      wrapper.querySelector(".font-select-popover").classList.add("is-hidden");
+    });
+  }
+
+  function syncFontSelectControl(select) {
+    const wrapper = select.closest("[data-font-select]");
+    if (!wrapper) return;
+    const option = select.selectedOptions[0];
+    const trigger = wrapper.querySelector(".font-select-trigger");
+    trigger.querySelector("[data-font-current]").textContent = option.textContent;
+    trigger.querySelector("[data-font-description]").textContent = option.dataset.description || "";
+    trigger.style.setProperty("--font-preview", fontFamilyForSelect(select, select.value));
+    wrapper.querySelectorAll(".font-select-option").forEach((button) => {
+      const active = button.dataset.value === select.value;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-selected", String(active));
+    });
+  }
+
+  function initializeFontSelects() {
+    document.querySelectorAll("[data-font-select]").forEach((wrapper) => {
+      const select = wrapper.querySelector("select");
+      const trigger = wrapper.querySelector(".font-select-trigger");
+      const popover = wrapper.querySelector(".font-select-popover");
+      Array.from(select.children).forEach((group) => {
+        const label = document.createElement("div");
+        label.className = "font-select-group-label";
+        label.textContent = group.label;
+        popover.appendChild(label);
+        Array.from(group.children).forEach((option) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "font-select-option";
+          button.dataset.value = option.value;
+          button.setAttribute("role", "option");
+          button.style.setProperty("--font-preview", fontFamilyForSelect(select, option.value));
+          const copy = document.createElement("span");
+          const name = document.createElement("b");
+          const description = document.createElement("small");
+          name.textContent = option.textContent;
+          description.textContent = option.dataset.description || "";
+          copy.append(name, description);
+          button.appendChild(copy);
+          popover.appendChild(button);
+        });
+      });
+      trigger.addEventListener("click", () => {
+        const opening = popover.classList.contains("is-hidden");
+        closeFontSelects(opening ? wrapper : null);
+        closeColorPicker();
+        popover.classList.toggle("is-hidden", !opening);
+        trigger.setAttribute("aria-expanded", String(opening));
+      });
+      popover.addEventListener("click", (event) => {
+        const optionButton = event.target.closest(".font-select-option");
+        if (!optionButton) return;
+        select.value = optionButton.dataset.value;
+        select.dispatchEvent(new Event("input", { bubbles: true }));
+        closeFontSelects();
+        trigger.focus();
+      });
+      syncFontSelectControl(select);
+    });
+  }
+
+  function hexToHsv(hex) {
+    const value = parseInt(hex.slice(1), 16);
+    const r = ((value >> 16) & 255) / 255;
+    const g = ((value >> 8) & 255) / 255;
+    const b = (value & 255) / 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+    let h = 0;
+    if (delta) {
+      if (max === r) h = 60 * (((g - b) / delta) % 6);
+      else if (max === g) h = 60 * ((b - r) / delta + 2);
+      else h = 60 * ((r - g) / delta + 4);
+    }
+    return { h: (h + 360) % 360, s: max ? delta / max : 0, v: max };
+  }
+
+  function hsvToHex({ h, s, v }) {
+    const chroma = v * s;
+    const x = chroma * (1 - Math.abs(((h / 60) % 2) - 1));
+    const offset = v - chroma;
+    const channels = h < 60 ? [chroma, x, 0]
+      : h < 120 ? [x, chroma, 0]
+        : h < 180 ? [0, chroma, x]
+          : h < 240 ? [0, x, chroma]
+            : h < 300 ? [x, 0, chroma]
+              : [chroma, 0, x];
+    return `#${channels.map((channel) => Math.round((channel + offset) * 255).toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  function syncColorPickerFromHex(hex) {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
+    colorPickerHsv = hexToHsv(hex);
+    elements.colorHue.value = String(Math.round(colorPickerHsv.h));
+    elements.colorHue.style.setProperty("--picker-hue", colorPickerHsv.h.toFixed(1));
+    elements.colorSaturation.style.setProperty("--picker-hue", colorPickerHsv.h.toFixed(1));
+    elements.colorSaturation.style.setProperty("--picker-saturation", `${(colorPickerHsv.s * 100).toFixed(1)}%`);
+    elements.colorSaturation.style.setProperty("--picker-value", `${((1 - colorPickerHsv.v) * 100).toFixed(1)}%`);
+    elements.customColorButton.style.setProperty("--custom-color", hex);
+    elements.colorPreview.style.setProperty("--custom-color", hex);
+  }
+
+  function applyColorPickerHsv() {
+    const hex = hsvToHex(colorPickerHsv);
+    elements.subtitleTranslationColor.value = hex;
+    updateSubtitleStyleFromControls();
+  }
+
+  function closeColorPicker() {
+    elements.subtitleColorPicker.classList.add("is-hidden");
+    elements.customColorButton.setAttribute("aria-expanded", "false");
+  }
+
+  function updateColorSaturationFromPointer(event) {
+    const bounds = elements.colorSaturation.getBoundingClientRect();
+    colorPickerHsv.s = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+    colorPickerHsv.v = 1 - Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
+    applyColorPickerHsv();
+  }
+
   function applySubtitleStyle(style = state.subtitleStyle) {
     const root = document.documentElement;
     const scale = style.scale / 100;
@@ -1846,7 +2035,13 @@
     elements.subtitleOpacity.value = String(style.opacity);
     elements.subtitleOpacityValue.value = `${style.opacity}%`;
     elements.subtitleBold.checked = style.bold;
-    elements.subtitleOpacity.style.setProperty("--fill", `${style.opacity}%`);
+    const opacityMin = Number(elements.subtitleOpacity.min);
+    const opacityMax = Number(elements.subtitleOpacity.max);
+    const opacityFill = ((style.opacity - opacityMin) / (opacityMax - opacityMin)) * 100;
+    elements.subtitleOpacity.style.setProperty("--fill", `${opacityFill.toFixed(3)}%`);
+    syncFontSelectControl(elements.subtitleOriginalFont);
+    syncFontSelectControl(elements.subtitleTranslationFont);
+    syncColorPickerFromHex(style.translationColor);
     elements.subtitleColorOptions.querySelectorAll("[data-subtitle-color]").forEach((button) => {
       button.classList.toggle(
         "is-active",
@@ -1929,6 +2124,8 @@
       applySubtitleStyle();
     }
     state.settingsStyleSnapshot = null;
+    closeFontSelects();
+    closeColorPicker();
     elements.aiSettingsModal.classList.add("is-hidden");
     elements.aiSettingsError.textContent = "";
   }
@@ -2666,9 +2863,9 @@
     setPlaying(false);
     cleanupPlayer();
     closeTuningPopovers();
-    document.body.classList.remove("workspace-active", "door-opening");
-    elements.urlForm.removeAttribute("aria-busy");
-    elements.submitButton.disabled = false;
+    document.body.classList.remove("workspace-active", "workspace-entering", "import-committing", "door-opening");
+    document.documentElement.classList.remove("workspace-view-transition");
+    setImportBusy(false);
     state.source = null;
     state.transcript = [];
     state.transcriptId = null;
@@ -2847,10 +3044,59 @@
   [
     elements.subtitleOriginalFont,
     elements.subtitleTranslationFont,
-    elements.subtitleTranslationColor,
     elements.subtitleOpacity,
     elements.subtitleBold,
   ].forEach((input) => input.addEventListener("input", updateSubtitleStyleFromControls));
+  elements.customColorButton.addEventListener("click", () => {
+    const opening = elements.subtitleColorPicker.classList.contains("is-hidden");
+    closeFontSelects();
+    elements.subtitleColorPicker.classList.toggle("is-hidden", !opening);
+    elements.customColorButton.setAttribute("aria-expanded", String(opening));
+  });
+  elements.colorPickerClose.addEventListener("click", () => {
+    closeColorPicker();
+    elements.customColorButton.focus();
+  });
+  elements.colorHue.addEventListener("input", (event) => {
+    colorPickerHsv.h = Number(event.target.value);
+    applyColorPickerHsv();
+  });
+  elements.colorSaturation.addEventListener("pointerdown", (event) => {
+    colorPickerDragging = true;
+    elements.colorSaturation.setPointerCapture(event.pointerId);
+    updateColorSaturationFromPointer(event);
+  });
+  elements.colorSaturation.addEventListener("pointermove", (event) => {
+    if (colorPickerDragging) updateColorSaturationFromPointer(event);
+  });
+  elements.colorSaturation.addEventListener("pointerup", (event) => {
+    colorPickerDragging = false;
+    if (elements.colorSaturation.hasPointerCapture(event.pointerId)) {
+      elements.colorSaturation.releasePointerCapture(event.pointerId);
+    }
+  });
+  elements.colorSaturation.addEventListener("pointercancel", () => {
+    colorPickerDragging = false;
+  });
+  elements.colorSaturation.addEventListener("keydown", (event) => {
+    const step = event.shiftKey ? 0.1 : 0.02;
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+    event.preventDefault();
+    if (event.key === "ArrowLeft") colorPickerHsv.s = Math.max(0, colorPickerHsv.s - step);
+    if (event.key === "ArrowRight") colorPickerHsv.s = Math.min(1, colorPickerHsv.s + step);
+    if (event.key === "ArrowUp") colorPickerHsv.v = Math.min(1, colorPickerHsv.v + step);
+    if (event.key === "ArrowDown") colorPickerHsv.v = Math.max(0, colorPickerHsv.v - step);
+    applyColorPickerHsv();
+  });
+  elements.subtitleTranslationColor.addEventListener("input", (event) => {
+    if (/^#[0-9a-f]{6}$/i.test(event.target.value)) updateSubtitleStyleFromControls();
+  });
+  elements.subtitleTranslationColor.addEventListener("change", (event) => {
+    if (!/^#[0-9a-f]{6}$/i.test(event.target.value)) {
+      event.target.value = state.subtitleStyle.translationColor;
+      syncColorPickerFromHex(state.subtitleStyle.translationColor);
+    }
+  });
   elements.subtitleColorOptions.addEventListener("click", (event) => {
     const swatch = event.target.closest("[data-subtitle-color]");
     if (!swatch) return;
@@ -3078,6 +3324,8 @@
 
   document.addEventListener("pointerdown", (event) => {
     if (!event.target.closest(".tuning-menu")) closeTuningPopovers();
+    if (!event.target.closest("[data-font-select]")) closeFontSelects();
+    if (!event.target.closest(".custom-color-picker")) closeColorPicker();
     if (
       !elements.dictionaryCard.classList.contains("is-hidden")
       && !event.target.closest("#dictionaryCard")
@@ -3090,11 +3338,25 @@
     ) closeSentenceAnalysis();
   });
 
+  syncAppViewportHeight();
+  window.addEventListener("resize", syncAppViewportHeight, { passive: true });
+  window.visualViewport?.addEventListener("resize", syncAppViewportHeight, { passive: true });
+
+  initializeFontSelects();
   applySubtitleStyle();
   setPlaybackSpeed(SPEEDS.indexOf(state.speed));
   setVolume(state.volume);
 
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && (
+      !elements.subtitleColorPicker.classList.contains("is-hidden")
+      || document.querySelector(".font-select-popover:not(.is-hidden)")
+    )) {
+      event.preventDefault();
+      closeColorPicker();
+      closeFontSelects();
+      return;
+    }
     if (event.key === "Escape" && !elements.aiSettingsModal.classList.contains("is-hidden")) {
       event.preventDefault();
       closeAiSettings();
