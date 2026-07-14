@@ -5668,144 +5668,44 @@ body:not(.workspace-active) .quiet-button:hover {
   z-index: 0;
   inset: -82px 0 0;
   overflow: hidden;
+  background: #050505;
   pointer-events: none;
 }
 
-.landing-scene::before {
+.landing-scene-frame {
   position: absolute;
   inset: 0;
-  background:
-    url("assets/landing-stage-light-v2.png") center / cover no-repeat,
-    radial-gradient(ellipse at 72% 45%, rgba(166, 111, 39, 0.12), transparent 36%);
-  content: "";
-  opacity: 0.3;
-  filter: saturate(0.72) brightness(0.66);
-  transition: opacity 900ms ease, filter 900ms ease;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transform-origin: 83% 55%;
+  will-change: opacity, transform, filter;
 }
 
-.doorway-aura,
-.doorway-beam,
-.doorway-haze,
-.doorway-threshold,
-.door-panel {
-  position: absolute;
-}
-
-.doorway-aura {
-  top: -12%;
-  right: 13.5%;
-  bottom: 13%;
-  width: 31%;
-  background:
-    radial-gradient(ellipse at 78% 57%, rgba(255, 196, 93, 0.42), rgba(157, 98, 30, 0.14) 38%, transparent 72%);
-  clip-path: polygon(58% 0, 100% 0, 72% 100%, 0 100%);
-  filter: blur(28px);
-  opacity: 0.55;
-  transform-origin: 92% 50%;
-  transition: clip-path 950ms cubic-bezier(0.22, 0.78, 0.2, 1), opacity 850ms ease, filter 850ms ease;
-}
-
-.doorway-beam {
-  top: -8%;
-  right: 16.4%;
-  bottom: 14.3%;
-  width: 28%;
-  background:
-    radial-gradient(ellipse at 90% 58%, rgba(255, 220, 146, 0.62), rgba(214, 146, 55, 0.18) 38%, transparent 76%);
-  clip-path: polygon(76% 0, 100% 0, 74% 100%, 18% 100%);
-  filter: blur(7px);
-  opacity: 0.34;
-  mix-blend-mode: screen;
-  transition: clip-path 950ms cubic-bezier(0.22, 0.78, 0.2, 1), opacity 820ms ease;
-}
-
-.doorway-haze {
-  right: 16%;
-  bottom: 10.5%;
-  width: 43%;
-  height: 15%;
-  background: radial-gradient(ellipse at 75% 45%, rgba(255, 202, 102, 0.48), rgba(180, 112, 34, 0.12) 38%, transparent 72%);
-  filter: blur(24px);
-  opacity: 0.38;
-  transform: skewX(-22deg) scaleX(0.75);
-  transform-origin: right center;
-  transition: opacity 850ms ease, transform 950ms cubic-bezier(0.22, 0.78, 0.2, 1);
-}
-
-.doorway-threshold {
-  right: 13.6%;
-  bottom: 13.6%;
-  width: 39%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(202, 137, 46, 0.25) 20%, #ffd27c 78%, rgba(255, 231, 174, 0.12));
-  box-shadow: 0 0 10px rgba(255, 188, 76, 0.55), 0 14px 35px rgba(192, 118, 27, 0.28);
-  opacity: 0.74;
-  transform: perspective(320px) rotateX(64deg);
-  transform-origin: right center;
-  transition: width 900ms cubic-bezier(0.22, 0.78, 0.2, 1), opacity 850ms ease;
-}
-
-.door-panel {
-  z-index: 2;
-  top: -10%;
-  right: -3%;
-  bottom: 13.4%;
-  width: 24%;
-  background:
-    linear-gradient(96deg, rgba(41, 30, 17, 0.66), rgba(6, 6, 5, 0.985) 16%, #050505 55%),
-    url("assets/landing-stage-light-v2.png") right center / auto 112% no-repeat;
-  clip-path: polygon(34% 0, 100% 0, 100% 100%, 0 100%);
-  filter: drop-shadow(-22px 0 27px rgba(0, 0, 0, 0.52));
-  transition: clip-path 960ms cubic-bezier(0.22, 0.78, 0.2, 1), filter 850ms ease;
-}
-
-.door-panel i {
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  width: 2px;
-  height: 110%;
-  background: linear-gradient(to bottom, #f5c66a 0%, #ffe2a2 47%, #f4b94d 100%);
-  box-shadow: -8px 0 18px rgba(242, 169, 61, 0.72), -28px 0 52px rgba(162, 97, 26, 0.38);
-  transform: rotate(7deg);
-  transform-origin: bottom center;
-  transition: left 960ms cubic-bezier(0.22, 0.78, 0.2, 1), box-shadow 850ms ease;
-}
-
-body.door-opening .landing-scene::before {
-  opacity: 0.48;
-  filter: saturate(0.94) brightness(0.78);
-}
-
-body.door-opening .doorway-aura {
-  clip-path: polygon(13% 0, 100% 0, 76% 100%, 0 100%);
-  filter: blur(35px);
-  opacity: 0.95;
-}
-
-body.door-opening .doorway-beam {
-  clip-path: polygon(31% 0, 100% 0, 78% 100%, 0 100%);
-  opacity: 0.88;
-}
-
-body.door-opening .doorway-haze {
-  opacity: 0.82;
-  transform: skewX(-22deg) scaleX(1.28);
-}
-
-body.door-opening .doorway-threshold {
-  width: 58%;
+.landing-scene-closed {
   opacity: 1;
+  filter: saturate(0.92) contrast(1.04) brightness(0.88);
+  transition: opacity 820ms ease, transform 980ms cubic-bezier(0.2, 0.72, 0.16, 1), filter 900ms ease;
 }
 
-body.door-opening .door-panel {
-  clip-path: polygon(58% 0, 100% 0, 100% 100%, 26% 100%);
-  filter: drop-shadow(-34px 0 35px rgba(0, 0, 0, 0.42));
+.landing-scene-open {
+  opacity: 0;
+  filter: saturate(0.88) brightness(0.78);
+  transform: scale(0.985) translateX(1.1%);
+  transition: opacity 920ms cubic-bezier(0.18, 0.72, 0.16, 1), transform 980ms cubic-bezier(0.2, 0.72, 0.16, 1), filter 900ms ease;
 }
 
-body.door-opening .door-panel i {
-  left: 26%;
-  box-shadow: -12px 0 24px rgba(255, 186, 69, 0.9), -52px 0 86px rgba(183, 108, 27, 0.56);
+body.door-opening .landing-scene-closed {
+  opacity: 0.08;
+  filter: saturate(1.04) contrast(1.08) brightness(1.02);
+  transform: scale(1.018) translateX(-0.7%);
+}
+
+body.door-opening .landing-scene-open {
+  opacity: 1;
+  filter: saturate(1.02) brightness(0.98);
+  transform: scale(1.012) translateX(0);
 }
 
 body.door-opening .landing-copy,
@@ -5902,11 +5802,11 @@ body.door-opening .landing-view {
 .landing-view .intake-column {
   position: absolute;
   z-index: 3;
-  right: 7.4vw;
+  right: clamp(44px, 6.5vw, 118px);
   bottom: 67px;
-  left: 43vw;
-  width: auto;
-  max-width: none;
+  left: auto;
+  width: clamp(520px, 40vw, 720px);
+  max-width: calc(100vw - 48px);
   justify-self: stretch;
 }
 
@@ -5944,10 +5844,10 @@ body.door-opening .landing-view {
 }
 
 .landing-view .url-field {
-  min-height: 62px;
-  padding: 6px 6px 6px 18px;
+  min-height: 56px;
+  padding: 5px 5px 5px 17px;
   border-color: rgba(255, 255, 255, 0.16);
-  border-radius: 5px;
+  border-radius: 14px;
   background: rgba(12, 12, 10, 0.87);
   box-shadow: 0 22px 58px rgba(0, 0, 0, 0.22);
 }
@@ -5959,14 +5859,14 @@ body.door-opening .landing-view {
 }
 
 .landing-view .url-icon {
-  width: 22px;
+  width: 20px;
   stroke: rgba(246, 243, 236, 0.78);
   stroke-width: 1.65;
 }
 
 .landing-view .url-field input {
-  height: 48px;
-  padding: 0 14px;
+  height: 44px;
+  padding: 0 12px;
   color: #f4f1ea;
   font-family: "Noto Sans SC", "IBM Plex Sans", sans-serif;
   font-size: 14px;
@@ -5978,17 +5878,17 @@ body.door-opening .landing-view {
 }
 
 .landing-view .submit-button {
-  min-width: 112px;
-  height: 48px;
-  padding: 0 20px;
+  min-width: 104px;
+  height: 44px;
+  padding: 0 18px;
   border: 1px solid rgba(255, 236, 186, 0.32);
-  border-radius: 4px;
+  border-radius: 10px;
   background: #dfaf4f;
   color: #171108;
   font-family: "Noto Sans SC", "IBM Plex Sans", sans-serif;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
-  gap: 13px;
+  gap: 11px;
   box-shadow: 0 5px 18px rgba(194, 132, 33, 0.2);
 }
 
@@ -6079,7 +5979,8 @@ body.door-opening .landing-view {
 
   .landing-view .intake-column {
     right: 3vw;
-    left: 40vw;
+    left: auto;
+    width: min(57vw, 650px);
   }
 
   .landing-view .workflow-strip {
@@ -6114,15 +6015,8 @@ body.door-opening .landing-view {
     inset: 0;
   }
 
-  .door-panel {
-    right: -12%;
-    width: 38%;
-  }
-
-  .doorway-aura,
-  .doorway-beam {
-    right: 8%;
-    width: 45%;
+  .landing-scene-frame {
+    object-position: 83% center;
   }
 
   .landing-copy,
@@ -6186,20 +6080,21 @@ body.door-opening .landing-view {
   }
 
   .landing-view .url-field {
-    min-height: 66px;
-    padding: 6px 6px 6px 14px;
+    min-height: 58px;
+    padding: 5px 5px 5px 14px;
+    border-radius: 14px;
     grid-template-columns: 19px minmax(0, 1fr) auto;
   }
 
   .landing-view .url-field input {
-    height: 52px;
+    height: 46px;
     padding: 0 10px;
     font-size: 13px;
   }
 
   .landing-view .submit-button {
     min-width: 98px;
-    height: 52px;
+    height: 46px;
     padding: 0 15px;
     font-size: 14px;
     gap: 9px;
@@ -6219,7 +6114,6 @@ body.door-opening .landing-view {
 
 @media (prefers-reduced-motion: reduce) {
   .landing-scene *,
-  .landing-scene::before,
   body.door-opening .landing-copy,
   body.door-opening .intake-column,
   body.door-opening .site-header {
