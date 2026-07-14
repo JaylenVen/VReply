@@ -53,6 +53,14 @@
 
     <main class="app-main">
       <section class="landing-view" id="landingView" aria-labelledby="heroTitle">
+        <div class="landing-scene" aria-hidden="true">
+          <div class="doorway-aura"></div>
+          <div class="doorway-beam"></div>
+          <div class="doorway-haze"></div>
+          <div class="doorway-threshold"></div>
+          <div class="door-panel"><i></i></div>
+        </div>
+
         <div class="landing-copy">
           <div class="eyebrow reveal reveal-1">
             Video to voice
@@ -60,23 +68,19 @@
 
           <h1 id="heroTitle" class="hero-title reveal reveal-2">
             <span>Watch it.</span>
-            <span class="hero-title-serif">Own the words.</span>
+            <span class="hero-title-shadow">Own the</span>
+            <span class="hero-title-serif">words.</span>
           </h1>
 
           <p class="hero-description reveal reveal-3">
-            Turn a YouTube video into a focused English speaking room.
-            Paste, listen, repeat — the transcript keeps your place.
+            <span>Turn a YouTube video into a focused English speaking room.</span>
+            <span>Paste, listen, repeat — the transcript keeps your place.</span>
           </p>
         </div>
 
         <div class="intake-column reveal reveal-3">
           <div class="intake-card">
-            <div class="intake-card-topline">
-              <span>开始一次口语练习</span>
-            </div>
-
             <form class="url-form" id="urlForm" novalidate>
-              <label for="videoUrl">视频链接</label>
               <div class="url-field" id="urlField">
                 <svg class="url-icon" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M10.6 13.4a4 4 0 0 0 5.7.1l2.1-2.1a4 4 0 1 0-5.7-5.7l-1.2 1.2" />
@@ -88,7 +92,7 @@
                   type="url"
                   inputmode="url"
                   autocomplete="url"
-                  placeholder="粘贴 YouTube 视频链接"
+                  placeholder="YouTube视频链接"
                   aria-describedby="urlError"
                 />
                 <button class="submit-button" type="submit" aria-label="导入视频">
@@ -105,15 +109,18 @@
 
           <div class="workflow-strip" aria-label="使用步骤">
             <div class="workflow-item">
-              <p><strong>粘贴链接</strong>视频直接在这里播放。</p>
+              <span class="workflow-number" aria-hidden="true">01</span>
+              <p><strong>粘贴链接</strong><span>视频直接在这里播放。</span></p>
             </div>
             <div class="workflow-divider" aria-hidden="true"></div>
             <div class="workflow-item">
-              <p><strong>听清每一句</strong>字幕会自动跟随播放。</p>
+              <span class="workflow-number" aria-hidden="true">02</span>
+              <p><strong>听清每一句</strong><span>字幕会自动跟随播放。</span></p>
             </div>
             <div class="workflow-divider" aria-hidden="true"></div>
             <div class="workflow-item">
-              <p><strong>开口跟读</strong>点选句子，反复练到顺口。</p>
+              <span class="workflow-number" aria-hidden="true">03</span>
+              <p><strong>开口跟读</strong><span>点选句子，反复练到顺口。</span></p>
             </div>
           </div>
         </div>

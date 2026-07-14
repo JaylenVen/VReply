@@ -177,6 +177,7 @@
     videoUrl: document.getElementById("videoUrl"),
     urlField: document.getElementById("urlField"),
     urlError: document.getElementById("urlError"),
+    submitButton: document.querySelector("#urlForm .submit-button"),
     projectTitle: document.getElementById("projectTitle"),
     videoStage: document.getElementById("videoStage"),
     videoAmbient: document.getElementById("videoAmbient"),
@@ -395,6 +396,13 @@
     }
 
     clearFieldError();
+    if (document.body.classList.contains("door-opening")) return;
+    document.body.classList.add("door-opening");
+    elements.urlForm.setAttribute("aria-busy", "true");
+    elements.submitButton.disabled = true;
+    await delay(window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 80 : 1000);
+    if (!document.body.classList.contains("door-opening")) return;
+
     document.body.classList.add("workspace-active");
     const token = ++state.loadToken;
     state.source = source;
@@ -443,6 +451,9 @@
 
     elements.landingView.classList.add("is-hidden");
     elements.workspaceView.classList.remove("is-hidden");
+    document.body.classList.remove("door-opening");
+    elements.urlForm.removeAttribute("aria-busy");
+    elements.submitButton.disabled = false;
     elements.aiSettingsButton.classList.remove("is-hidden");
     elements.newVideoButton.classList.remove("is-hidden");
     elements.transcriptSkeleton.classList.remove("is-hidden");
@@ -2655,7 +2666,9 @@
     setPlaying(false);
     cleanupPlayer();
     closeTuningPopovers();
-    document.body.classList.remove("workspace-active");
+    document.body.classList.remove("workspace-active", "door-opening");
+    elements.urlForm.removeAttribute("aria-busy");
+    elements.submitButton.disabled = false;
     state.source = null;
     state.transcript = [];
     state.transcriptId = null;
