@@ -4944,13 +4944,14 @@ output,
 
 .settings-dialog {
   display: flex;
-  width: min(940px, 100%);
-  max-height: min(760px, calc(100dvh - 32px));
+  width: min(900px, 100%);
+  max-height: min(740px, calc(100dvh - 32px));
   padding: 0;
   overflow: hidden;
   flex-direction: column;
   border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 24px;
+  border-color: rgba(230, 191, 112, 0.16);
+  border-radius: 20px;
   background:
     radial-gradient(circle at 80% 0%, rgba(var(--accent-rgb), 0.055), transparent 34%),
     #141513;
@@ -4958,20 +4959,20 @@ output,
 }
 
 .settings-heading {
-  padding: 25px 28px 0;
+  padding: 23px 26px 19px;
 }
 
 .settings-kicker {
   color: rgba(240, 201, 120, 0.72);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.17em;
 }
 
 .settings-heading h2 {
-  margin-top: 5px;
+  margin-top: 6px;
   font-family: var(--font-ui);
-  font-size: 29px;
+  font-size: 30px;
   font-weight: 600;
   letter-spacing: -0.035em;
 }
@@ -5013,27 +5014,28 @@ output,
   min-height: 0;
   flex: 1;
   overflow: hidden;
-  grid-template-columns: 190px minmax(0, 1fr);
+  grid-template-columns: 170px minmax(0, 1fr);
   border-top: 1px solid rgba(255, 255, 255, 0.065);
   border-bottom: 1px solid rgba(255, 255, 255, 0.065);
 }
 
 .settings-nav {
   display: flex;
-  padding: 18px 12px;
+  padding: 15px 11px;
   flex-direction: column;
   border-right: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.014);
-  gap: 5px;
+  gap: 8px;
 }
 
 .settings-nav button {
   position: relative;
-  display: grid;
-  min-height: 66px;
-  padding: 11px 12px 11px 42px;
-  border: 0;
-  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  min-height: 50px;
+  padding: 0 13px 0 48px;
+  border: 1px solid transparent;
+  border-radius: 11px;
   background: transparent;
   color: rgba(255, 255, 255, 0.48);
   cursor: pointer;
@@ -5047,32 +5049,36 @@ output,
 }
 
 .settings-nav button.is-active {
-  background: linear-gradient(100deg, rgba(var(--accent-rgb), 0.12), rgba(var(--accent-rgb), 0.025));
+  border-color: rgba(237, 199, 119, 0.82);
+  background: linear-gradient(105deg, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-rgb), 0.035));
+  color: #f1d396;
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.08), 0 7px 22px rgba(0, 0, 0, 0.12);
+}
+
+.settings-nav button.is-active span {
   color: #f1d396;
 }
 
 .settings-nav button.is-active::before {
-  position: absolute;
-  top: 13px;
-  bottom: 13px;
-  left: 0;
-  width: 2px;
-  border-radius: 99px;
-  background: #e5bb65;
-  content: "";
+  display: none;
 }
 
 .settings-nav span {
   position: absolute;
-  top: 13px;
-  left: 13px;
-  color: rgba(255, 255, 255, 0.25);
-  font-size: 9px;
+  top: 50%;
+  left: 14px;
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.34);
+  font-size: 10px;
+  transform: translateY(-50%);
 }
 
 .settings-nav b {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   line-height: 1.2;
 }
 
@@ -5084,7 +5090,7 @@ output,
 
 .settings-stage {
   min-height: 0;
-  padding: 22px 24px 26px;
+  padding: 22px 24px 24px;
   overflow: auto;
   scrollbar-color: rgba(var(--accent-rgb), 0.35) transparent;
   scrollbar-width: thin;
@@ -5092,7 +5098,7 @@ output,
 
 .settings-pane {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   animation: settings-pane-in 180ms ease both;
 }
 
@@ -5111,7 +5117,7 @@ output,
 .settings-pane-heading h3 {
   margin: 0;
   color: rgba(255, 255, 255, 0.92);
-  font-size: 18px;
+  font-size: 19px;
   letter-spacing: -0.02em;
 }
 
@@ -5123,11 +5129,11 @@ output,
 }
 
 .settings-pane-heading > span {
-  padding: 5px 7px;
+  padding: 5px 8px;
   border: 1px solid rgba(var(--accent-rgb), 0.16);
   border-radius: 7px;
   color: rgba(240, 201, 120, 0.62);
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 500;
   letter-spacing: 0.09em;
   white-space: nowrap;
@@ -5136,8 +5142,8 @@ output,
 .subtitle-style-preview {
   position: relative;
   display: grid;
-  min-height: 112px;
-  padding: 24px 26px;
+  min-height: 108px;
+  padding: 22px 24px;
   align-content: center;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.065);
@@ -5192,8 +5198,8 @@ output,
 
 .subtitle-setting-row {
   display: flex;
-  min-height: 59px;
-  padding: 10px 15px;
+  min-height: 60px;
+  padding: 10px 16px;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid rgba(255, 255, 255, 0.055);
@@ -5213,8 +5219,8 @@ output,
 
 .subtitle-setting-row b {
   color: rgba(255, 255, 255, 0.84);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .subtitle-setting-row small {
@@ -5225,14 +5231,14 @@ output,
 .font-size-stepper {
   display: grid;
   align-items: center;
-  grid-template-columns: 28px 56px 28px;
+  grid-template-columns: 32px 64px 32px;
   gap: 4px;
 }
 
 .font-size-stepper button {
   display: grid;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -5249,7 +5255,7 @@ output,
 
 .font-size-stepper output {
   color: rgba(255, 255, 255, 0.78);
-  font-size: 13px;
+  font-size: 14px;
   text-align: center;
 }
 
@@ -5271,15 +5277,15 @@ output,
 }
 
 .settings-select-wrap select {
-  min-width: 174px;
-  height: 36px;
-  padding: 0 30px 0 11px;
+  min-width: 220px;
+  height: 40px;
+  padding: 0 32px 0 12px;
   appearance: none;
   border: 1px solid rgba(255, 255, 255, 0.075);
   border-radius: 9px;
   background: #1a1c19;
   color: rgba(255, 255, 255, 0.7);
-  font-size: 11px;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -5293,8 +5299,8 @@ output,
 .custom-color {
   position: relative;
   display: grid;
-  width: 25px;
-  height: 25px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -5356,7 +5362,7 @@ output,
 
 .subtitle-range-control output {
   color: rgba(255, 255, 255, 0.68);
-  font-size: 11px;
+  font-size: 13px;
   text-align: right;
 }
 
@@ -5409,7 +5415,7 @@ output,
 }
 
 .settings-pane .settings-section {
-  padding: 16px;
+  padding: 18px;
   border-color: rgba(255, 255, 255, 0.065);
   border-radius: 15px;
   background: rgba(255, 255, 255, 0.018);
@@ -5426,8 +5432,16 @@ output,
   grid-template-columns: 30px minmax(0, 1fr) auto;
 }
 
+.settings-pane .settings-section-heading h3 {
+  font-size: 15px;
+}
+
+.settings-pane .settings-section-heading > span {
+  font-size: 11px;
+}
+
 .settings-pane .engine-option {
-  min-height: 70px;
+  min-height: 66px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.025);
 }
@@ -5437,9 +5451,28 @@ output,
 }
 
 .settings-pane .api-settings-fields input {
-  height: 44px;
+  height: 46px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.03);
+  font-size: 13px;
+}
+
+.settings-pane .api-settings-fields label > span,
+.settings-pane .engine-copy b {
+  font-size: 14px;
+}
+
+.settings-pane .engine-copy small {
+  font-size: 12px;
+}
+
+.settings-pane .pronunciation-options label {
+  font-size: 14px;
+}
+
+.settings-pane .ai-feature-list span {
+  padding: 6px 9px;
+  font-size: 11px;
 }
 
 .settings-error {
@@ -5467,16 +5500,16 @@ output,
 
 .settings-footer > span {
   color: rgba(255, 255, 255, 0.32);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .settings-save {
-  min-width: 126px;
-  height: 39px;
+  min-width: 132px;
+  height: 42px;
   border-radius: 10px;
   background: #e0b961;
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 @media (max-width: 760px) {

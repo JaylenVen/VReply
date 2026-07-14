@@ -6,6 +6,8 @@
   const TRANSLATION_ENGINE_KEY = "vreply:translation-engine";
   const PRONUNCIATION_ACCENT_KEY = "vreply:pronunciation-accent";
   const SUBTITLE_STYLE_KEY = "vreply:subtitle-style";
+  const HOVER_LOOKUP_DELAY_MS = 650;
+  const HOVER_MOTION_TOLERANCE_PX = 6;
   const DEFAULT_SUBTITLE_STYLE = Object.freeze({
     scale: 100,
     originalFont: "inter",
@@ -16,13 +18,17 @@
   });
   const ORIGINAL_FONTS = Object.freeze({
     inter: '"Inter", "Helvetica Neue", Arial, sans-serif',
-    "ibm-plex": '"IBM Plex Sans", "Helvetica Neue", Arial, sans-serif',
-    "source-serif": '"Source Serif 4", Georgia, serif',
+    "helvetica-neue": '"Helvetica Neue", Helvetica, Arial, sans-serif',
+    roboto: '"Roboto", "Helvetica Neue", Arial, sans-serif',
+    arial: 'Arial, Helvetica, sans-serif',
+    "sf-pro-display": '"SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif',
+    "segoe-ui": '"Segoe UI", "Helvetica Neue", Arial, sans-serif',
   });
   const TRANSLATION_FONTS = Object.freeze({
-    "source-han-sans": '"Source Han Sans SC", "Noto Sans SC", "PingFang SC", sans-serif',
-    "noto-serif": '"Noto Serif SC", "Source Han Serif SC", "Songti SC", serif',
-    system: '"PingFang SC", "Microsoft YaHei", sans-serif',
+    "source-han-sans": '"Source Han Sans SC", "Noto Sans CJK SC", "Noto Sans SC", sans-serif',
+    "noto-sans-cjk-sc": '"Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", sans-serif',
+    "pingfang-sc": '"PingFang SC", "Microsoft YaHei", sans-serif',
+    "harmonyos-sans": '"HarmonyOS Sans SC", "HarmonyOS Sans", "Noto Sans SC", sans-serif',
   });
   const COMMON_PHRASES = new Map(Object.entries({
     "a little bit": ["一点；稍微", "to a small degree"],
@@ -326,6 +332,9 @@
     analysisRequestId: 0,
     phrasePointer: null,
     suppressWordClick: false,
+    hoverLookupTimer: null,
+    hoverLookupCandidate: null,
+    hoverLookupPoint: null,
     hoverLookupTarget: null,
     panelView: "transcript",
     summaryController: null,
@@ -412,6 +421,10 @@
     state.dictionaryCache.clear();
     state.phrasePointer = null;
     state.suppressWordClick = false;
+    if (state.hoverLookupTimer) window.clearTimeout(state.hoverLookupTimer);
+    state.hoverLookupTimer = null;
+    state.hoverLookupCandidate = null;
+    state.hoverLookupPoint = null;
     state.hoverLookupTarget = null;
     state.studyOverlay = null;
     state.resumeAfterStudy = false;
@@ -1066,6 +1079,10 @@
   }
 
   function renderCaptionWords(segment) {
+    if (
+      (state.hoverLookupTarget && elements.captionText.contains(state.hoverLookupTarget))
+      || (state.hoverLookupCandidate && elements.captionText.contains(state.hoverLookupCandidate))
+    ) clearHoverLookup();
     elements.captionText.replaceChildren();
     const captionLength = String(segment.text || "").length;
     elements.captionText.classList.toggle("is-long", captionLength > 105);
@@ -1125,6 +1142,10 @@
   }
 
   function renderTranscript(query) {
+    if (
+      (state.hoverLookupTarget && elements.transcriptList.contains(state.hoverLookupTarget))
+      || (state.hoverLookupCandidate && elements.transcriptList.contains(state.hoverLookupCandidate))
+    ) clearHoverLookup();
     const normalizedQuery = String(query || "").trim().toLowerCase();
     const fragment = document.createDocumentFragment();
     let resultCount = 0;
@@ -2254,7 +2275,7 @@
     requestAnimationFrame(() => positionWordPreview(target));
   }
 
-  function scheduleWordPreview(target) {
+  function scheduleWordPreview(target, delay = 480) {
     if (!target || target === state.wordPreviewTarget || !state.transcriptId) return;
     hideWordPreview();
     state.wordPreviewTarget = target;
@@ -2272,7 +2293,7 @@
       } finally {
         if (state.wordPreviewController === controller) state.wordPreviewController = null;
       }
-    }, 480);
+    }, delay);
   }
 
   async function lookupDefinition(selectionValue, index) {
@@ -2647,6 +2668,10 @@
     state.translationInFlight.clear();
     state.phrasePointer = null;
     state.suppressWordClick = false;
+    if (state.hoverLookupTimer) window.clearTimeout(state.hoverLookupTimer);
+    state.hoverLookupTimer = null;
+    state.hoverLookupCandidate = null;
+    state.hoverLookupPoint = null;
     state.hoverLookupTarget = null;
     state.studyOverlay = null;
     state.resumeAfterStudy = false;
@@ -2747,6 +2772,48 @@
     if (!(node instanceof Element)) return null;
     return node.closest(".line-phrase[data-selection], .caption-phrase[data-selection]")
       || node.closest(".line-word[data-selection], .caption-word[data-selection]");
+  }
+
+  function clearHoverLookupTimer() {
+    if (state.hoverLookupTimer) window.clearTimeout(state.hoverLookupTimer);
+    state.hoverLookupTimer = null;
+  }
+
+  function clearHoverLookup(options) {
+    clearHoverLookupTimer();
+    state.hoverLookupCandidate = null;
+    state.hoverLookupPoint = null;
+    if (!state.hoverLookupTarget) return;
+    state.hoverLookupTarget = null;
+    hideWordPreview();
+    if (state.studyOverlay === "lookup-hover") endStudyOverlay("lookup-hover", options);
+  }
+
+  function activateHoverLookup(target) {
+    if (target !== state.hoverLookupCandidate || !target.isConnected) return;
+    const point = state.hoverLookupPoint;
+    const current = point
+      ? subtitleLookupTarget(document.elementFromPoint(point.x, point.y))
+      : null;
+    if (current !== target) return;
+    state.hoverLookupTimer = null;
+    state.hoverLookupCandidate = null;
+    state.hoverLookupPoint = null;
+    state.hoverLookupTarget = target;
+    if (!state.studyOverlay) beginStudyOverlay("lookup-hover");
+    scheduleWordPreview(target, 0);
+  }
+
+  function scheduleHoverLookup(target, event) {
+    if (!target || target === state.hoverLookupTarget) return;
+    if (state.hoverLookupTarget) clearHoverLookup();
+    clearHoverLookupTimer();
+    state.hoverLookupCandidate = target;
+    state.hoverLookupPoint = { x: event.clientX, y: event.clientY };
+    state.hoverLookupTimer = window.setTimeout(
+      () => activateHoverLookup(target),
+      HOVER_LOOKUP_DELAY_MS
+    );
   }
 
   elements.urlForm.addEventListener("submit", (event) => {
@@ -2951,24 +3018,42 @@
 
   elements.workspaceView.addEventListener("mouseover", (event) => {
     const target = subtitleLookupTarget(event.target);
-    if (!target || target === state.hoverLookupTarget) return;
-    if (!state.hoverLookupTarget && !state.studyOverlay) beginStudyOverlay("lookup-hover");
-    state.hoverLookupTarget = target;
-    scheduleWordPreview(target);
+    if (target) scheduleHoverLookup(target, event);
   });
   elements.workspaceView.addEventListener("mouseout", (event) => {
     const target = subtitleLookupTarget(event.target);
-    if (!target || target !== state.hoverLookupTarget) return;
     const related = subtitleLookupTarget(event.relatedTarget);
     if (related === target) return;
-    if (related) {
-      state.hoverLookupTarget = related;
-      scheduleWordPreview(related);
+    if (target === state.hoverLookupTarget) clearHoverLookup();
+    if (target === state.hoverLookupCandidate) {
+      clearHoverLookupTimer();
+      state.hoverLookupCandidate = null;
+      state.hoverLookupPoint = null;
+    }
+    if (related) scheduleHoverLookup(related, event);
+  });
+  elements.workspaceView.addEventListener("pointermove", (event) => {
+    const target = subtitleLookupTarget(event.target);
+    if (!target) {
+      if (state.hoverLookupCandidate || state.hoverLookupTarget) clearHoverLookup();
       return;
     }
-    state.hoverLookupTarget = null;
-    hideWordPreview();
-    endStudyOverlay("lookup-hover");
+    if (state.hoverLookupTarget && target !== state.hoverLookupTarget) {
+      clearHoverLookup();
+      scheduleHoverLookup(target, event);
+      return;
+    }
+    if (target !== state.hoverLookupCandidate || !state.hoverLookupPoint) return;
+    const distance = Math.hypot(
+      event.clientX - state.hoverLookupPoint.x,
+      event.clientY - state.hoverLookupPoint.y
+    );
+    if (distance >= HOVER_MOTION_TOLERANCE_PX) scheduleHoverLookup(target, event);
+  });
+  elements.workspaceView.addEventListener("mouseleave", () => clearHoverLookup());
+  window.addEventListener("blur", () => clearHoverLookup());
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) clearHoverLookup();
   });
   elements.workspaceView.addEventListener("focusin", (event) => {
     const word = subtitleLookupTarget(event.target);
