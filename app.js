@@ -462,7 +462,7 @@
     await delay(reducedMotion ? 30 : 110);
     if (!document.body.classList.contains("import-committing")) return;
     document.body.classList.add("door-opening");
-    await delay(reducedMotion ? 50 : 1080);
+    await delay(reducedMotion ? 50 : 760);
     if (!document.body.classList.contains("door-opening")) return;
 
     const token = ++state.loadToken;
