@@ -109,6 +109,85 @@ class NormalizeJson3SegmentsTests(unittest.TestCase):
         self.assertEqual([segment["text"] for segment in result], ["First spoken thought", "A new thought"])
 
 
+class CaptionTrackSelectionTests(unittest.TestCase):
+    def test_spanish_manual_track_wins_over_automatic_track(self) -> None:
+        response = {
+            "captions": {
+                "playerCaptionsTracklistRenderer": {
+                    "captionTracks": [
+                        {"languageCode": "en", "baseUrl": "https://www.youtube.com/api/timedtext?en=1"},
+                        {
+                            "languageCode": "es",
+                            "kind": "asr",
+                            "baseUrl": "https://www.youtube.com/api/timedtext?es=auto",
+                        },
+                        {
+                            "languageCode": "es-419",
+                            "baseUrl": "https://www.youtube.com/api/timedtext?es=manual",
+                        },
+                    ]
+                }
+            }
+        }
+
+        selected = server.choose_caption_track(response, "es")
+
+        self.assertEqual(selected["languageCode"], "es-419")
+
+    def test_missing_requested_language_has_a_specific_error(self) -> None:
+        response = {
+            "captions": {
+                "playerCaptionsTracklistRenderer": {
+                    "captionTracks": [{"languageCode": "en", "baseUrl": "https://example.test/en"}]
+                }
+            }
+        }
+
+        with self.assertRaises(server.APIError) as raised:
+            server.choose_caption_track(response, "es")
+
+        self.assertEqual(raised.exception.code, "es_captions_unavailable")
+
+    def test_transcript_cache_is_separated_by_learning_language(self) -> None:
+        with server._CACHE_LOCK:
+            server._CACHE.clear()
+            server._TRANSCRIPT_INDEX.clear()
+        response = {
+            "videoDetails": {"title": "Bilingual sample", "lengthSeconds": "1"},
+            "captions": {
+                "playerCaptionsTracklistRenderer": {
+                    "captionTracks": [
+                        {
+                            "languageCode": "en",
+                            "baseUrl": "https://www.youtube.com/api/timedtext?lang=en",
+                        },
+                        {
+                            "languageCode": "es",
+                            "baseUrl": "https://www.youtube.com/api/timedtext?lang=es",
+                        },
+                    ]
+                }
+            },
+        }
+        captions = json.dumps({
+            "events": [{"tStartMs": 0, "dDurationMs": 1000, "segs": [{"utf8": "Hello."}]}]
+        }).encode()
+        with patch.object(server, "extract_player_response", return_value=response), patch.object(
+            server,
+            "_fetch_bytes",
+            side_effect=[b"watch", captions, b"watch", captions],
+        ) as fetch:
+            english = server.transcribe_youtube("https://youtu.be/SVWmuJx0hHM", "en")
+            spanish = server.transcribe_youtube("https://youtu.be/SVWmuJx0hHM", "es")
+            english_cached = server.transcribe_youtube("https://youtu.be/SVWmuJx0hHM", "en")
+
+        self.assertEqual(english["metadata"]["captions"]["languageCode"], "en")
+        self.assertEqual(spanish["metadata"]["captions"]["languageCode"], "es")
+        self.assertNotEqual(english["transcriptId"], spanish["transcriptId"])
+        self.assertTrue(english_cached["cached"])
+        self.assertEqual(fetch.call_count, 4)
+
+
 class TranscriptCasingTests(unittest.TestCase):
     def test_transcript_wide_uppercase_is_converted_to_readable_case(self) -> None:
         texts = [
@@ -185,6 +264,19 @@ class LanguageServiceTests(unittest.TestCase):
         }
         self.transcript["transcriptId"] = server._make_transcript_id("SVWmuJx0hHM", self.transcript)
         server._cache_put("SVWmuJx0hHM", self.transcript)
+        self.spanish_transcript = {
+            "segments": [
+                {"id": 1, "start": 0.0, "end": 1.0, "text": "Encendimos el sistema."},
+                {"id": 2, "start": 1.0, "end": 2.0, "text": "El proyecto puede despegar ahora."},
+                {"id": 3, "start": 2.0, "end": 3.0, "text": "Ese resultado sorprendió a todos."},
+            ],
+            "metadata": {"captions": {"languageCode": "es-419"}},
+        }
+        self.spanish_transcript["transcriptId"] = server._make_transcript_id(
+            "SVWmuJx0hHM",
+            self.spanish_transcript,
+        )
+        server._cache_put("SVWmuJx0hHM:es", self.spanish_transcript)
 
     def _env(self):
         return patch.dict(
@@ -239,6 +331,26 @@ class LanguageServiceTests(unittest.TestCase):
         self.assertEqual(context["next"], "That result surprised everyone.")
         self.assertFalse(first["translations"][0]["cached"])
         self.assertTrue(second["translations"][0]["cached"])
+
+    def test_spanish_translation_uses_the_transcript_language(self) -> None:
+        def fake_call(**kwargs):
+            return {
+                "translations": [
+                    {"segmentId": 2, "text": "这个项目现在可以起飞了。", "note": ""}
+                ]
+            }
+
+        payload = {
+            "transcriptId": self.spanish_transcript["transcriptId"],
+            "segmentIds": [2],
+            "targetLanguage": "zh-CN",
+        }
+        with self._env(), patch.object(server, "_call_llm_structured", side_effect=fake_call) as ai_call:
+            server.translate_segments(payload)
+
+        request = ai_call.call_args.kwargs
+        self.assertEqual(request["input_data"]["sourceLanguage"], "es")
+        self.assertIn("Spanish-to-Simplified-Chinese", request["instructions"])
 
     def test_summary_uses_translation_api_config_and_is_cached(self) -> None:
         calls = []
@@ -352,6 +464,48 @@ class LanguageServiceTests(unittest.TestCase):
         self.assertEqual(first["entry"]["senses"][0]["partOfSpeech"], "短语动词 phrasal verb")
         self.assertEqual(first["entry"]["wordForms"][0]["word"], "took off")
         self.assertIn("soar", first["entry"]["synonyms"])
+
+    def test_spanish_dictionary_skips_english_local_data_and_uses_ai(self) -> None:
+        generated = {
+            "headword": "despegar",
+            "pronunciationUS": "/despeˈɣaɾ/",
+            "pronunciationUK": "/despeˈɣaɾ/",
+            "partOfSpeech": "动词 verbo",
+            "meaning": "起飞；迅速发展",
+            "englishMeaning": "Separarse del suelo e iniciar el vuelo.",
+            "contextMeaning": "本句比喻项目即将迅速发展。",
+            "example": "El avión va a despegar.",
+            "exampleTranslation": "飞机要起飞了。",
+            "senses": [{
+                "partOfSpeech": "动词 verbo",
+                "meaning": "起飞",
+                "englishDefinition": "Separarse del suelo e iniciar el vuelo.",
+                "example": "El avión va a despegar.",
+                "exampleTranslation": "飞机要起飞了。",
+            }],
+            "wordForms": [{"label": "过去时", "word": "despegó"}],
+            "etymology": "由 des- 与 pegar 构成。",
+            "phrases": [],
+            "synonyms": ["elevarse"],
+            "wordFamily": [],
+        }
+        payload = {
+            "transcriptId": self.spanish_transcript["transcriptId"],
+            "segmentId": 2,
+            "selection": "despegar",
+            "targetLanguage": "zh-CN",
+        }
+        with self._env(), patch.object(server, "_local_dictionary_lookup") as local_lookup, patch.object(
+            server,
+            "_call_llm_structured",
+            return_value=generated,
+        ) as ai_call:
+            result = server.define_selection(payload)
+
+        local_lookup.assert_not_called()
+        self.assertEqual(ai_call.call_args.kwargs["input_data"]["sourceLanguage"], "es")
+        self.assertIn("learners of Spanish", ai_call.call_args.kwargs["instructions"])
+        self.assertEqual(result["entry"]["sourceLanguage"], "es")
 
     def test_local_dictionary_works_without_an_api_key(self) -> None:
         payload = {

@@ -4858,39 +4858,6 @@ output,
   opacity: var(--subtitle-translation-opacity);
 }
 
-.caption-phrase,
-.line-phrase {
-  border-radius: 3px;
-  color: inherit;
-  cursor: help;
-  text-decoration-color: rgba(var(--accent-rgb), 0.72);
-  text-decoration-line: underline;
-  text-decoration-style: dashed;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.23em;
-  transition: color 150ms ease, background 150ms ease, text-decoration-color 150ms ease;
-}
-
-.caption-phrase:hover,
-.caption-phrase:focus-visible,
-.line-phrase:hover,
-.line-phrase:focus-visible {
-  background: rgba(var(--accent-rgb), 0.08);
-  color: #f0c978;
-  outline: 0;
-  text-decoration-color: #f0c978;
-  text-shadow: 0 0 18px rgba(var(--accent-rgb), 0.25);
-}
-
-.caption-phrase:hover .caption-word,
-.caption-phrase:focus-visible .caption-word,
-.line-phrase:hover .line-word,
-.line-phrase:focus-visible .line-word {
-  color: inherit;
-  filter: none;
-  text-shadow: inherit;
-}
-
 .transcript-actions .follow-toggle,
 .transcript-actions .translation-toggle {
   position: relative;
@@ -5801,6 +5768,10 @@ output,
   font-size: 14px;
 }
 
+.pronunciation-options label i {
+  font-style: normal;
+}
+
 .settings-pane .ai-feature-list span {
   padding: 6px 9px;
   font-size: 11px;
@@ -6188,6 +6159,86 @@ body.door-opening .landing-view {
 
 .landing-view .intake-card::after {
   display: none;
+}
+
+.landing-view .learning-language-picker {
+  display: grid;
+  margin: 0 0 15px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.landing-view .learning-language-label {
+  color: rgba(246, 243, 236, 0.58);
+  font-family: "Noto Sans SC", "IBM Plex Sans", sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.landing-view .learning-language-options {
+  display: grid;
+  max-width: 310px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 11px;
+  background: rgba(12, 12, 10, 0.72);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.landing-view .learning-language-options label {
+  position: relative;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.landing-view .learning-language-options input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.landing-view .learning-language-options span {
+  display: flex;
+  min-height: 34px;
+  padding: 0 13px;
+  border-radius: 8px;
+  align-items: center;
+  justify-content: center;
+  color: rgba(246, 243, 236, 0.58);
+  font-family: "Noto Sans SC", "IBM Plex Sans", sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  gap: 7px;
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.landing-view .learning-language-options b {
+  color: inherit;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.landing-view .learning-language-options input:checked + span {
+  background: #dfaf4f;
+  color: #171108;
+  box-shadow: 0 5px 16px rgba(194, 132, 33, 0.18);
+}
+
+.landing-view .learning-language-options input:focus-visible + span {
+  outline: 2px solid #f1c86f;
+  outline-offset: 2px;
+}
+
+.landing-view .learning-language-options input:disabled + span {
+  cursor: progress;
+  opacity: 0.62;
 }
 
 .landing-view .intake-card-topline {
@@ -6581,6 +6632,17 @@ html.workspace-view-transition::view-transition-new(root) {
   .landing-view .intake-card-topline {
     margin-bottom: 24px;
     font-size: 16px;
+  }
+
+  .landing-view .learning-language-picker {
+    margin-bottom: 13px;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .landing-view .learning-language-options {
+    width: 100%;
+    max-width: none;
   }
 
   .landing-view .url-field {

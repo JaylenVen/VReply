@@ -3,6 +3,7 @@
 
   const DEFAULT_DURATION = 150;
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3];
+  const LEARNING_LANGUAGE_KEY = "vreply:learning-language";
   const TRANSLATION_ENGINE_KEY = "vreply:translation-engine";
   const PRONUNCIATION_ACCENT_KEY = "vreply:pronunciation-accent";
   const SUBTITLE_STYLE_KEY = "vreply:subtitle-style";
@@ -34,6 +35,36 @@
     "noto-serif-sc": '"Noto Serif SC", "Source Han Serif SC", SimSun, serif',
     "zcool-xiaowei": '"ZCOOL XiaoWei", "Noto Serif SC", SimSun, serif',
     "ma-shan-zheng": '"Ma Shan Zheng", STKaiti, KaiTi, cursive',
+  });
+  const LEARNING_LANGUAGES = Object.freeze({
+    en: Object.freeze({
+      code: "en",
+      locale: "en",
+      nameZh: "英语",
+      translationPair: "中英",
+      heroEyebrow: "Video to voice",
+      heroPrimary: "Turn a YouTube video into a focused English speaking room.",
+      heroSecondary: "Paste, listen, repeat — the transcript keeps your place.",
+      subtitlePreview: "Speak clearly, stay curious.",
+      accents: Object.freeze([
+        Object.freeze({ value: "en-US", badge: "US", short: "美", label: "美式发音" }),
+        Object.freeze({ value: "en-GB", badge: "UK", short: "英", label: "英式发音" }),
+      ]),
+    }),
+    es: Object.freeze({
+      code: "es",
+      locale: "es",
+      nameZh: "西班牙语",
+      translationPair: "中西",
+      heroEyebrow: "Vídeo a voz · Español",
+      heroPrimary: "Turn a YouTube video into a focused Spanish speaking room.",
+      heroSecondary: "Pega, escucha, repite — every line stays in step.",
+      subtitlePreview: "Habla con claridad, mantén la curiosidad.",
+      accents: Object.freeze([
+        Object.freeze({ value: "es-ES", badge: "ES", short: "西", label: "西班牙发音" }),
+        Object.freeze({ value: "es-MX", badge: "MX", short: "墨", label: "墨西哥发音" }),
+      ]),
+    }),
   });
   const COMMON_PHRASES = new Map(Object.entries({
     "a little bit": ["一点；稍微", "to a small degree"],
@@ -100,9 +131,14 @@
     "work on": ["从事；改善", "spend time developing something"],
   }));
 
-  const COMMON_PHRASE_ENTRIES = Array.from(COMMON_PHRASES.keys())
-    .map((phrase) => ({ phrase, tokens: phrase.split(" ") }))
-    .sort((left, right) => right.tokens.length - left.tokens.length);
+  function initialLearningLanguage() {
+    try {
+      const saved = localStorage.getItem(LEARNING_LANGUAGE_KEY);
+      return LEARNING_LANGUAGES[saved] ? saved : "en";
+    } catch (_error) {
+      return "en";
+    }
+  }
 
   function initialTranslationEngine() {
     try {
@@ -114,13 +150,19 @@
     return "Translator" in self ? "chrome" : "api";
   }
 
-  function initialPronunciationAccent() {
+  function initialPronunciationAccent(languageCode) {
+    const language = LEARNING_LANGUAGES[languageCode] || LEARNING_LANGUAGES.en;
+    const supported = language.accents.map((accent) => accent.value);
     try {
-      return localStorage.getItem(PRONUNCIATION_ACCENT_KEY) === "en-GB" ? "en-GB" : "en-US";
+      const saved = localStorage.getItem(`${PRONUNCIATION_ACCENT_KEY}:${language.code}`)
+        || (language.code === "en" ? localStorage.getItem(PRONUNCIATION_ACCENT_KEY) : "");
+      return supported.includes(saved) ? saved : supported[0];
     } catch (_error) {
-      return "en-US";
+      return supported[0];
     }
   }
+
+  const INITIAL_LEARNING_LANGUAGE = initialLearningLanguage();
 
   function initialSubtitleStyle() {
     try {
@@ -175,10 +217,19 @@
     subtitleBold: document.getElementById("subtitleBold"),
     subtitlePreviewOriginal: document.getElementById("subtitlePreviewOriginal"),
     subtitlePreviewTranslation: document.getElementById("subtitlePreviewTranslation"),
+    learningLanguagePicker: document.getElementById("learningLanguagePicker"),
+    learningLanguageInputs: Array.from(document.querySelectorAll('input[name="learningLanguage"]')),
+    heroEyebrow: document.getElementById("heroEyebrow"),
+    heroDescriptionPrimary: document.getElementById("heroDescriptionPrimary"),
+    heroDescriptionSecondary: document.getElementById("heroDescriptionSecondary"),
     translationEngineChrome: document.getElementById("translationEngineChrome"),
     translationEngineApi: document.getElementById("translationEngineApi"),
     pronunciationAccentUs: document.getElementById("pronunciationAccentUs"),
     pronunciationAccentUk: document.getElementById("pronunciationAccentUk"),
+    pronunciationPrimaryBadge: document.getElementById("pronunciationPrimaryBadge"),
+    pronunciationPrimaryLabel: document.getElementById("pronunciationPrimaryLabel"),
+    pronunciationSecondaryBadge: document.getElementById("pronunciationSecondaryBadge"),
+    pronunciationSecondaryLabel: document.getElementById("pronunciationSecondaryLabel"),
     chromeEngineOption: document.getElementById("chromeEngineOption"),
     chromeTranslationStatus: document.getElementById("chromeTranslationStatus"),
     apiSettingsFields: document.getElementById("apiSettingsFields"),
@@ -260,6 +311,8 @@
     dictionaryLoading: document.getElementById("dictionaryLoading"),
     dictionaryContent: document.getElementById("dictionaryContent"),
     dictionaryPronunciations: document.getElementById("dictionaryPronunciations"),
+    dictionaryPronunciationPrimary: document.getElementById("dictionaryPronunciationPrimary"),
+    dictionaryPronunciationSecondary: document.getElementById("dictionaryPronunciationSecondary"),
     dictionaryPronunciationUS: document.getElementById("dictionaryPronunciationUS"),
     dictionaryPronunciationUK: document.getElementById("dictionaryPronunciationUK"),
     dictionaryContext: document.getElementById("dictionaryContext"),
@@ -275,18 +328,23 @@
     dictionaryWordFamilyBlock: document.getElementById("dictionaryWordFamilyBlock"),
     dictionaryWordFamily: document.getElementById("dictionaryWordFamily"),
     wordPreview: document.getElementById("wordPreview"),
+    wordPreviewSource: document.getElementById("wordPreviewSource"),
     wordPreviewTerm: document.getElementById("wordPreviewTerm"),
     wordPreviewMeta: document.getElementById("wordPreviewMeta"),
+    wordPreviewPrimaryBadge: document.getElementById("wordPreviewPrimaryBadge"),
+    wordPreviewSecondaryBadge: document.getElementById("wordPreviewSecondaryBadge"),
     wordPreviewPronunciationUS: document.getElementById("wordPreviewPronunciationUS"),
     wordPreviewPronunciationUK: document.getElementById("wordPreviewPronunciationUK"),
     wordPreviewSenses: document.getElementById("wordPreviewSenses"),
     wordPreviewForms: document.getElementById("wordPreviewForms"),
+    wordPreviewFooter: document.getElementById("wordPreviewFooter"),
     toast: document.getElementById("toast"),
     toastTitle: document.getElementById("toastTitle"),
     toastText: document.getElementById("toastText"),
   };
 
   const state = {
+    learningLanguage: INITIAL_LEARNING_LANGUAGE,
     source: null,
     transcript: [],
     activeIndex: -1,
@@ -312,11 +370,12 @@
     languageAvailable: false,
     llmConfig: null,
     translationEngine: initialTranslationEngine(),
-    pronunciationAccent: initialPronunciationAccent(),
+    pronunciationAccent: initialPronunciationAccent(INITIAL_LEARNING_LANGUAGE),
     subtitleStyle: initialSubtitleStyle(),
     settingsStyleSnapshot: null,
     chromeTranslationAvailability: "checking",
     chromeTranslator: null,
+    chromeTranslatorLanguage: null,
     chromeTranslatorPromise: null,
     chromeDownloadProgress: 0,
     showTranslations: false,
@@ -357,6 +416,83 @@
   let youTubeApiPromise = null;
   let colorPickerHsv = { h: 40, s: 0.13, v: 0.85 };
   let colorPickerDragging = false;
+
+  function learningLanguage() {
+    return LEARNING_LANGUAGES[state.learningLanguage] || LEARNING_LANGUAGES.en;
+  }
+
+  function pronunciationAccentLabel(value) {
+    return learningLanguage().accents.find((accent) => accent.value === value)?.label || "默认发音";
+  }
+
+  function syncLearningLanguageUi() {
+    const language = learningLanguage();
+    const [primaryAccent, secondaryAccent] = language.accents;
+    document.body.dataset.learningLanguage = language.code;
+    elements.learningLanguageInputs.forEach((input) => {
+      input.checked = input.value === language.code;
+    });
+    elements.heroEyebrow.textContent = language.heroEyebrow;
+    elements.heroDescriptionPrimary.textContent = language.heroPrimary;
+    elements.heroDescriptionSecondary.textContent = language.heroSecondary;
+    elements.videoUrl.placeholder = `带${language.nameZh}字幕的 YouTube 视频链接`;
+    elements.subtitlePreviewOriginal.textContent = language.subtitlePreview;
+    if (!state.source) elements.projectTitle.textContent = `日常${language.nameZh}练习`;
+
+    elements.pronunciationAccentUs.value = primaryAccent.value;
+    elements.pronunciationAccentUk.value = secondaryAccent.value;
+    elements.pronunciationAccentUs.checked = state.pronunciationAccent === primaryAccent.value;
+    elements.pronunciationAccentUk.checked = state.pronunciationAccent === secondaryAccent.value;
+    elements.pronunciationPrimaryBadge.textContent = primaryAccent.badge;
+    elements.pronunciationPrimaryLabel.textContent = primaryAccent.label;
+    elements.pronunciationSecondaryBadge.textContent = secondaryAccent.badge;
+    elements.pronunciationSecondaryLabel.textContent = secondaryAccent.label;
+    elements.wordPreviewPrimaryBadge.textContent = primaryAccent.badge;
+    elements.wordPreviewSecondaryBadge.textContent = secondaryAccent.badge;
+    elements.wordPreviewSource.textContent = language.code === "en" ? "LOCAL" : "AI";
+    elements.wordPreviewFooter.textContent = language.code === "en"
+      ? "本地 ECDICT · 点击查看 AI 语境解析"
+      : "AI 语境词典 · 点击查看完整解析";
+
+    [
+      [elements.dictionaryPronunciationPrimary, primaryAccent],
+      [elements.dictionaryPronunciationSecondary, secondaryAccent],
+    ].forEach(([button, accent]) => {
+      button.dataset.accent = accent.value;
+      button.setAttribute("aria-label", `播放${accent.label}`);
+      button.querySelector("b").textContent = accent.short;
+    });
+  }
+
+  function discardChromeTranslator() {
+    if (state.chromeTranslator && typeof state.chromeTranslator.destroy === "function") {
+      try {
+        state.chromeTranslator.destroy();
+      } catch (_error) {
+        // The browser may already have released the language model.
+      }
+    }
+    state.chromeTranslator = null;
+    state.chromeTranslatorLanguage = null;
+    state.chromeTranslatorPromise = null;
+    state.chromeTranslationAvailability = "checking";
+    state.chromeDownloadProgress = 0;
+  }
+
+  function setLearningLanguage(languageCode) {
+    if (!LEARNING_LANGUAGES[languageCode] || languageCode === state.learningLanguage || state.source) return;
+    state.learningLanguage = languageCode;
+    state.pronunciationAccent = initialPronunciationAccent(languageCode);
+    try {
+      localStorage.setItem(LEARNING_LANGUAGE_KEY, languageCode);
+    } catch (_error) {
+      // The language still applies for the current session when storage is unavailable.
+    }
+    discardChromeTranslator();
+    syncLearningLanguageUi();
+    updateTranslationToggle();
+    detectChromeTranslationAvailability();
+  }
 
   function userMessage(value, fallback) {
     const text = String(value || "").trim();
@@ -405,6 +541,7 @@
     const label = elements.submitButton.querySelector("span");
     elements.urlForm.toggleAttribute("aria-busy", busy);
     elements.submitButton.disabled = busy;
+    elements.learningLanguageInputs.forEach((input) => { input.disabled = busy; });
     elements.submitButton.setAttribute("aria-label", busy ? "正在打开视频" : "导入视频");
     if (label) label.textContent = busy ? "打开中" : "导入";
   }
@@ -453,6 +590,7 @@
       showFieldError(source.error);
       return;
     }
+    source.language = state.learningLanguage;
 
     clearFieldError();
     if (document.body.classList.contains("import-committing")) return;
@@ -529,23 +667,24 @@
     elements.workspaceView.setAttribute("aria-busy", "true");
     setInteractiveReady(false);
 
-    elements.projectTitle.textContent = "已导入的视频";
+    const sourceLanguage = LEARNING_LANGUAGES[source.language];
+    elements.projectTitle.textContent = `${sourceLanguage.nameZh} · 已导入的视频`;
     elements.transcriptCount.textContent = "0";
 
     mountVideo(source, token);
     fetchVideoTitle(source, token);
 
-    const transcriptPromise = resolveTranscript(source.url);
+    const transcriptPromise = resolveTranscript(source.url, source.language);
     const phases = [
       {
         progress: 28,
         title: "正在打开视频…",
-        detail: "视频已就绪，正在读取语音内容。",
+        detail: `视频已就绪，正在读取${sourceLanguage.nameZh}字幕。`,
         wait: 290,
       },
       {
         progress: 59,
-        title: "正在识别对话…",
+        title: `正在整理${sourceLanguage.nameZh}对话…`,
         detail: "正在区分自然停顿、对话与背景音乐。",
         wait: 390,
       },
@@ -601,14 +740,14 @@
     updatePlaybackUI(0, true);
 
     elements.extractTitle.textContent = "字幕已准备好。";
-    elements.extractDetail.textContent = "现在可以逐句听、循环练，跟着开口了。";
+    elements.extractDetail.textContent = `现在可以逐句听、循环练，跟着${sourceLanguage.nameZh}字幕开口了。`;
     elements.extractProgress.style.width = "100%";
     await delay(170);
     elements.extractOverlay.classList.add("is-complete");
     saveSession();
   }
 
-  async function resolveTranscript(url) {
+  async function resolveTranscript(url, sourceLanguage) {
     const endpoint = window.VREPLY_TRANSCRIBE_ENDPOINT;
     if (endpoint) {
       const controller = new AbortController();
@@ -617,15 +756,22 @@
         const response = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url }),
+          body: JSON.stringify({ url, sourceLanguage }),
           signal: controller.signal,
         });
         if (!response.ok) {
-          let message = "暂时无法读取这个视频的字幕。";
+          const languageName = LEARNING_LANGUAGES[sourceLanguage]?.nameZh || "目标语言";
+          let message = `暂时无法读取这个视频的${languageName}字幕。`;
           try {
             const failure = await response.json();
-            if (typeof failure.error === "string") message = userMessage(failure.error, message);
-            else if (failure.error && failure.error.message) message = userMessage(failure.error.message, message);
+            const errorCode = failure.error && failure.error.code;
+            if (errorCode === "captions_unavailable" || errorCode === `${sourceLanguage}_captions_unavailable`) {
+              message = `这个视频没有可用的${languageName}字幕。`;
+            } else if (typeof failure.error === "string") {
+              message = userMessage(failure.error, message);
+            } else if (failure.error && failure.error.message) {
+              message = userMessage(failure.error.message, message);
+            }
           } catch (_error) {
             // Keep the user-facing fallback message.
           }
@@ -635,7 +781,8 @@
         const segments = normalizeSegments(payload.segments);
         const transcriptId = typeof payload.transcriptId === "string" ? payload.transcriptId : null;
         if (segments.length && transcriptId) return { segments, transcriptId };
-        throw new Error("这个视频没有可用的英文字幕。");
+        const languageName = LEARNING_LANGUAGES[sourceLanguage]?.nameZh || "目标语言";
+        throw new Error(`这个视频没有可用的${languageName}字幕。`);
       } catch (error) {
         if (error.name === "AbortError") {
           throw new Error("字幕读取时间过长，请稍后重试。");
@@ -851,7 +998,8 @@
       if (!response.ok) return;
       const data = await response.json();
       if (token === state.loadToken && data.title) {
-        elements.projectTitle.textContent = String(data.title);
+        const languageName = LEARNING_LANGUAGES[source.language]?.nameZh || "语言";
+        elements.projectTitle.textContent = `${languageName} · ${String(data.title)}`;
       }
     } catch (_error) {
       // A title is optional; playback and transcript still work without it.
@@ -1102,38 +1250,15 @@
     updateCaptionTranslation(index);
   }
 
-  function normalizePhraseToken(value) {
-    return String(value || "")
-      .toLocaleLowerCase("en")
-      .replace(/[’]/g, "'")
-      .match(/[a-z]+(?:'[a-z]+)*/u)?.[0] || "";
-  }
-
-  function commonPhraseRanges(values) {
-    const tokens = values.map(normalizePhraseToken);
-    const ranges = new Map();
-    for (let index = 0; index < tokens.length; index += 1) {
-      if (!tokens[index]) continue;
-      const match = COMMON_PHRASE_ENTRIES.find((entry) => (
-        index + entry.tokens.length <= tokens.length
-        && entry.tokens.every((token, offset) => token === tokens[index + offset])
-      ));
-      if (!match) continue;
-      ranges.set(index, { end: index + match.tokens.length - 1, phrase: match.phrase });
-      index += match.tokens.length - 1;
-    }
-    return ranges;
-  }
-
-  function makeCaptionWord(word, index, total, interactive = true) {
+  function makeCaptionWord(word, index, total) {
     const span = document.createElement("span");
     span.className = "caption-word";
     if (/\d/u.test(String(word.text || ""))) span.classList.add("is-numeric");
     span.dataset.word = String(index);
     span.dataset.start = String(word.start);
     span.dataset.end = String(word.end);
-    const selection = String(word.text || "").match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/u)?.[0] || "";
-    if (selection && interactive) {
+    const selection = String(word.text || "").match(/[\p{L}\p{M}]+(?:['’-][\p{L}\p{M}]+)*/u)?.[0] || "";
+    if (selection) {
       span.dataset.selection = selection;
       span.dataset.index = String(state.activeIndex);
       span.tabIndex = 0;
@@ -1163,25 +1288,8 @@
           end: segment.start + (duration * (index + 1)) / fallbackTokens.length,
         }));
 
-    const phraseRanges = commonPhraseRanges(words.map((word) => word.text));
     for (let index = 0; index < words.length; index += 1) {
-      const phraseRange = phraseRanges.get(index);
-      if (!phraseRange) {
-        elements.captionText.appendChild(makeCaptionWord(words[index], index, words.length));
-        continue;
-      }
-      const phrase = document.createElement("span");
-      phrase.className = "caption-phrase";
-      phrase.dataset.selection = phraseRange.phrase;
-      phrase.dataset.index = String(state.activeIndex);
-      phrase.tabIndex = 0;
-      phrase.setAttribute("role", "button");
-      phrase.setAttribute("aria-label", `查询短语 ${phraseRange.phrase} 的释义`);
-      for (let wordIndex = index; wordIndex <= phraseRange.end; wordIndex += 1) {
-        phrase.appendChild(makeCaptionWord(words[wordIndex], wordIndex, words.length, false));
-      }
-      elements.captionText.appendChild(phrase);
-      index = phraseRange.end;
+      elements.captionText.appendChild(makeCaptionWord(words[index], index, words.length));
     }
   }
 
@@ -1401,7 +1509,7 @@
     const value = String(text || "");
     let parts = [];
     if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
-      const segmenter = new Intl.Segmenter("en", { granularity: "word" });
+      const segmenter = new Intl.Segmenter(learningLanguage().locale, { granularity: "word" });
       parts = Array.from(segmenter.segment(value)).map((part) => ({
         text: part.segment,
         isWordLike: Boolean(part.isWordLike),
@@ -1411,43 +1519,7 @@
         .map((part) => ({ text: part, isWordLike: /[\p{L}\p{N}]/u.test(part) }));
     }
 
-    const wordPositions = parts.reduce((positions, part, index) => {
-      if (part.isWordLike) positions.push(index);
-      return positions;
-    }, []);
-    const phraseRanges = commonPhraseRanges(wordPositions.map((index) => parts[index].text));
-    const phrasesByPart = new Map();
-    phraseRanges.forEach((range, wordIndex) => {
-      phrasesByPart.set(wordPositions[wordIndex], {
-        end: wordPositions[range.end],
-        phrase: range.phrase,
-      });
-    });
-
-    for (let index = 0; index < parts.length; index += 1) {
-      const range = phrasesByPart.get(index);
-      if (!range) {
-        appendLookupPart(container, parts[index].text, parts[index].isWordLike, lineIndex);
-        continue;
-      }
-      const phrase = document.createElement("span");
-      phrase.className = "line-phrase";
-      phrase.dataset.index = String(lineIndex);
-      phrase.dataset.selection = range.phrase;
-      phrase.tabIndex = 0;
-      phrase.setAttribute("role", "button");
-      phrase.setAttribute("aria-label", `查询短语 ${range.phrase} 的释义`);
-      for (let partIndex = index; partIndex <= range.end; partIndex += 1) {
-        appendLookupPart(
-          phrase,
-          parts[partIndex].text,
-          parts[partIndex].isWordLike,
-          lineIndex
-        );
-      }
-      container.appendChild(phrase);
-      index = range.end;
-    }
+    parts.forEach((part) => appendLookupPart(container, part.text, part.isWordLike, lineIndex));
   }
 
   function appendLookupPart(container, text, isWordLike, lineIndex) {
@@ -1475,7 +1547,7 @@
     }
     if (state.chromeTranslationAvailability === "checking") return "正在检查浏览器支持情况…";
     if (state.chromeTranslationAvailability === "downloading") {
-      return `正在下载中英语言包… ${state.chromeDownloadProgress}%`;
+      return `正在下载${learningLanguage().translationPair}语言包… ${state.chromeDownloadProgress}%`;
     }
     if (state.chromeTranslationAvailability === "downloadable") {
       return "可以使用，首次翻译时会下载语言包。";
@@ -1624,6 +1696,7 @@
   }
 
   async function detectChromeTranslationAvailability() {
+    const sourceLanguage = state.learningLanguage;
     if (!("Translator" in self)) {
       state.chromeTranslationAvailability = "unavailable";
       if (state.translationEngine === "chrome") setTranslationEngine("api");
@@ -1631,18 +1704,26 @@
       return;
     }
     try {
-      state.chromeTranslationAvailability = await self.Translator.availability({
-        sourceLanguage: "en",
+      const availability = await self.Translator.availability({
+        sourceLanguage,
         targetLanguage: "zh",
       });
+      if (sourceLanguage !== state.learningLanguage) return;
+      state.chromeTranslationAvailability = availability;
     } catch (_error) {
+      if (sourceLanguage !== state.learningLanguage) return;
       state.chromeTranslationAvailability = "error";
     }
     updateTranslationToggle();
   }
 
   async function ensureChromeTranslator() {
-    if (state.chromeTranslator) return state.chromeTranslator;
+    const sourceLanguage = state.learningLanguage;
+    const languagePair = learningLanguage().translationPair;
+    if (state.chromeTranslator && state.chromeTranslatorLanguage === sourceLanguage) {
+      return state.chromeTranslator;
+    }
+    if (state.chromeTranslator) discardChromeTranslator();
     if (!("Translator" in self) || state.chromeTranslationAvailability === "unavailable") {
       throw new Error("此浏览器不支持内置翻译，请使用桌面版 Chrome 138 或更高版本，或切换为 API 翻译。");
     }
@@ -1651,29 +1732,40 @@
     state.chromeTranslationAvailability = "downloading";
     state.chromeDownloadProgress = 0;
     updateTranslationToggle();
-    showToast("正在准备 Chrome 翻译", "首次使用需要下载中英语言包，请稍候。");
-    state.chromeTranslatorPromise = self.Translator.create({
-      sourceLanguage: "en",
+    showToast("正在准备 Chrome 翻译", `首次使用需要下载${languagePair}语言包，请稍候。`);
+    const translatorPromise = self.Translator.create({
+      sourceLanguage,
       targetLanguage: "zh",
       monitor(monitor) {
         monitor.addEventListener("downloadprogress", (event) => {
+          if (sourceLanguage !== state.learningLanguage) return;
           state.chromeDownloadProgress = Math.round(Number(event.loaded || 0) * 100);
           updateTranslationToggle();
         });
       },
     });
+    state.chromeTranslatorPromise = translatorPromise;
     try {
-      state.chromeTranslator = await state.chromeTranslatorPromise;
+      const translator = await translatorPromise;
+      if (sourceLanguage !== state.learningLanguage) {
+        if (typeof translator.destroy === "function") translator.destroy();
+        throw new Error("学习语言已切换，请重新开启翻译。");
+      }
+      state.chromeTranslator = translator;
+      state.chromeTranslatorLanguage = sourceLanguage;
       state.chromeTranslationAvailability = "available";
       state.chromeDownloadProgress = 100;
       updateTranslationToggle();
       return state.chromeTranslator;
     } catch (_error) {
+      if (sourceLanguage !== state.learningLanguage) {
+        throw new Error("学习语言已切换，请重新开启翻译。");
+      }
       state.chromeTranslationAvailability = "error";
       updateTranslationToggle();
-      throw new Error("Chrome 中英翻译语言包准备失败，请检查网络后重试，或切换为 API 翻译。");
+      throw new Error(`Chrome ${languagePair}翻译语言包准备失败，请检查网络后重试，或切换为 API 翻译。`);
     } finally {
-      state.chromeTranslatorPromise = null;
+      if (state.chromeTranslatorPromise === translatorPromise) state.chromeTranslatorPromise = null;
     }
   }
 
@@ -2097,8 +2189,8 @@
     elements.aiBaseUrl.value = config.baseUrl || "https://api.deepseek.com";
     elements.aiModel.value = config.model || "deepseek-v4-flash";
     elements.aiApiKey.value = "";
-    elements.pronunciationAccentUs.checked = state.pronunciationAccent === "en-US";
-    elements.pronunciationAccentUk.checked = state.pronunciationAccent === "en-GB";
+    elements.pronunciationAccentUs.checked = state.pronunciationAccent === elements.pronunciationAccentUs.value;
+    elements.pronunciationAccentUk.checked = state.pronunciationAccent === elements.pronunciationAccentUk.value;
     elements.aiSettingsError.textContent = "";
     state.settingsStyleSnapshot = { ...state.subtitleStyle };
     syncSubtitleStyleControls();
@@ -2133,7 +2225,9 @@
   async function saveAiSettings(event) {
     event.preventDefault();
     const engine = elements.translationEngineChrome.checked ? "chrome" : "api";
-    const pronunciationAccent = elements.pronunciationAccentUk.checked ? "en-GB" : "en-US";
+    const pronunciationAccent = elements.pronunciationAccentUk.checked
+      ? elements.pronunciationAccentUk.value
+      : elements.pronunciationAccentUs.value;
     const config = state.llmConfig || {};
     const apiKey = elements.aiApiKey.value.trim();
     const sameExistingConfig = state.languageAvailable
@@ -2179,7 +2273,8 @@
       }
       state.pronunciationAccent = pronunciationAccent;
       try {
-        localStorage.setItem(PRONUNCIATION_ACCENT_KEY, pronunciationAccent);
+        localStorage.setItem(`${PRONUNCIATION_ACCENT_KEY}:${state.learningLanguage}`, pronunciationAccent);
+        if (state.learningLanguage === "en") localStorage.setItem(PRONUNCIATION_ACCENT_KEY, pronunciationAccent);
       } catch (_error) {
         // The preference still applies for the current session when storage is unavailable.
       }
@@ -2202,7 +2297,7 @@
             : "字幕将在当前设备上完成翻译。"
           : state.languageAvailable
             ? `未完成的字幕将通过 ${state.llmConfig.model} 继续翻译。`
-            : `已默认使用${pronunciationAccent === "en-GB" ? "英式" : "美式"}发音；模型 API 尚未配置。`
+            : `已默认使用${pronunciationAccentLabel(pronunciationAccent)}；模型 API 尚未配置。`
       );
       if (apiConfigUpdated && state.panelView === "summary") loadAiSummary();
     } catch (error) {
@@ -2369,7 +2464,10 @@
   }
 
   async function fetchLocalDefinition(selection, index, signal) {
-    const cacheKey = selection.toLocaleLowerCase();
+    if (state.learningLanguage !== "en") {
+      throw new Error("西班牙语语境查词需要先在设置中配置模型 API。");
+    }
+    const cacheKey = `en:${selection.toLocaleLowerCase("en")}`;
     const cached = state.localDictionaryCache.get(cacheKey);
     if (cached) return cached;
 
@@ -2425,7 +2523,7 @@
     const previewRect = elements.wordPreview.getBoundingClientRect();
     const margin = 12;
     const gap = 12;
-    if (target.classList.contains("caption-word") || target.classList.contains("caption-phrase")) {
+    if (target.classList.contains("caption-word")) {
       let left = Math.max(margin, Math.min(targetRect.left, window.innerWidth - previewRect.width - margin));
       let top = targetRect.top - previewRect.height - gap;
       if (top < margin) top = targetRect.bottom + gap;
@@ -2491,6 +2589,14 @@
       const selection = String(target.dataset.selection || "").trim();
       const index = Number(target.dataset.index);
       if (!selection || !state.transcript[index] || target !== state.wordPreviewTarget) return;
+      if (state.learningLanguage !== "en") {
+        const cached = state.dictionaryCache.get(
+          `${state.transcriptId}:${state.transcript[index].id}:${selection.toLocaleLowerCase(learningLanguage().locale)}`
+        );
+        if (cached) renderWordPreview(cached, target);
+        else hideWordPreview();
+        return;
+      }
       const controller = new AbortController();
       state.wordPreviewController = controller;
       try {
@@ -2517,7 +2623,7 @@
       return;
     }
 
-    const cacheKey = `${state.transcriptId}:${state.transcript[index].id}:${selection.toLocaleLowerCase()}`;
+    const cacheKey = `${state.transcriptId}:${state.transcript[index].id}:${selection.toLocaleLowerCase(learningLanguage().locale)}`;
     const cached = state.dictionaryCache.get(cacheKey);
     if (cached) {
       if (requestId === state.dictionaryRequestId) renderDictionaryEntry(cached);
@@ -2529,8 +2635,11 @@
     const token = state.loadToken;
     let localEntry = null;
     let enrichmentFinished = false;
-    const localPromise = fetchLocalDefinition(selection, index, controller.signal)
+    const localPromise = (state.learningLanguage === "en"
+      ? fetchLocalDefinition(selection, index, controller.signal)
+      : Promise.resolve(null))
       .then((entry) => {
+        if (!entry) return null;
         localEntry = entry;
         if (
           token === state.loadToken
@@ -2545,7 +2654,11 @@
     try {
       if (!state.languageAvailable) {
         const entry = await localPromise;
-        if (!entry) throw new Error("本地词典暂未收录该词或短语。配置模型 API 后可使用 AI 语境解释。");
+        if (!entry) {
+          throw new Error(state.learningLanguage === "es"
+            ? "西班牙语语境查词需要先在设置中配置模型 API。"
+            : "本地词典暂未收录该词或短语。配置模型 API 后可使用 AI 语境解释。");
+        }
         state.dictionaryCache.set(cacheKey, entry);
         if (requestId === state.dictionaryRequestId) renderDictionaryEntry(entry);
         return;
@@ -2916,6 +3029,7 @@
     elements.captionTranslation.textContent = "译文将在开启翻译后显示";
     elements.captionTranslation.classList.remove("is-loading", "has-error");
     clearFieldError();
+    syncLearningLanguageUi();
     requestAnimationFrame(() => elements.videoUrl.focus());
   }
 
@@ -2948,6 +3062,7 @@
         JSON.stringify({
           url: state.source.url,
           title: elements.projectTitle.textContent,
+          learningLanguage: state.learningLanguage,
           savedAt: Date.now(),
         })
       );
@@ -2980,8 +3095,7 @@
 
   function subtitleLookupTarget(node) {
     if (!(node instanceof Element)) return null;
-    return node.closest(".line-phrase[data-selection], .caption-phrase[data-selection]")
-      || node.closest(".line-word[data-selection], .caption-word[data-selection]");
+    return node.closest(".line-word[data-selection], .caption-word[data-selection]");
   }
 
   function clearHoverLookupTimer() {
@@ -3026,6 +3140,10 @@
     );
   }
 
+  elements.learningLanguagePicker.addEventListener("change", (event) => {
+    const input = event.target.closest('input[name="learningLanguage"]');
+    if (input) setLearningLanguage(input.value);
+  });
   elements.urlForm.addEventListener("submit", (event) => {
     event.preventDefault();
     startImport(elements.videoUrl.value);
@@ -3124,7 +3242,7 @@
     togglePlay();
   });
   elements.videoStage.addEventListener("click", (event) => {
-    if (event.target.closest(".extract-overlay, .caption-word, .caption-phrase") || !state.interactiveReady) return;
+    if (event.target.closest(".extract-overlay, .caption-word") || !state.interactiveReady) return;
     closeStudyOverlayForPlayback();
     togglePlay();
   });
@@ -3329,12 +3447,12 @@
     if (
       !elements.dictionaryCard.classList.contains("is-hidden")
       && !event.target.closest("#dictionaryCard")
-      && !event.target.closest(".line-word, .line-phrase, .caption-word, .caption-phrase, #analysisButton, #playButton, #videoStage")
+      && !event.target.closest(".line-word, .caption-word, #analysisButton, #playButton, #videoStage")
     ) closeDictionary();
     if (
       !elements.analysisCard.classList.contains("is-hidden")
       && !event.target.closest("#analysisCard")
-      && !event.target.closest("#analysisButton, .line-word, .line-phrase, .caption-word, .caption-phrase, #playButton, #videoStage")
+      && !event.target.closest("#analysisButton, .line-word, .caption-word, #playButton, #videoStage")
     ) closeSentenceAnalysis();
   });
 
@@ -3343,6 +3461,7 @@
   window.visualViewport?.addEventListener("resize", syncAppViewportHeight, { passive: true });
 
   initializeFontSelects();
+  syncLearningLanguageUi();
   applySubtitleStyle();
   setPlaybackSpeed(SPEEDS.indexOf(state.speed));
   setVolume(state.volume);
