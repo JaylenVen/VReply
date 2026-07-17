@@ -4728,11 +4728,11 @@ body.workspace-entering .workspace-view {
   --caption-original-size: 23px;
   --caption-original-long-size: 20px;
   --caption-original-very-long-size: 18px;
-  --caption-translation-size: 14px;
+  --caption-translation-size: 17px;
   --transcript-original-size: 14px;
   --transcript-active-size: 16.5px;
-  --transcript-translation-size: 10.5px;
-  --transcript-active-translation-size: 11.5px;
+  --transcript-translation-size: 12.5px;
+  --transcript-active-translation-size: 13.5px;
 }
 
 body,
@@ -6696,5 +6696,111 @@ html.workspace-view-transition::view-transition-new(root) {
 
   .landing-view .submit-button span {
     display: none;
+  }
+}
+
+/* Workspace: single-shell cinema layout and responsive transcript performance */
+
+body.workspace-active .practice-grid {
+  grid-template-columns: minmax(0, 1fr) clamp(400px, 27vw, 540px);
+  gap: 16px;
+}
+
+body.workspace-active .video-panel {
+  border-radius: 20px;
+  background:
+    radial-gradient(ellipse at 50% 34%, rgba(62, 49, 33, 0.2), transparent 58%),
+    #0b0c0b;
+}
+
+body.workspace-active .video-stage {
+  margin: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.workspace-active .video-stage::after {
+  background: radial-gradient(circle at 50% 43%, transparent 42%, rgba(4, 5, 4, 0.36) 100%);
+}
+
+body.workspace-active .video-ambient {
+  inset: -34px;
+  opacity: 0.48;
+}
+
+body.workspace-active .video-mount {
+  width: min(78%, 1040px);
+  height: min(86%, 590px);
+  border: 0;
+  border-radius: 14px;
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.32);
+}
+
+.panel-tab:not(.is-active) #transcriptCount {
+  display: none;
+}
+
+.transcript-scroll {
+  contain: layout paint;
+  overflow-anchor: none;
+  scrollbar-gutter: stable;
+  scroll-behavior: auto;
+}
+
+.transcript-item {
+  contain: layout paint style;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
+  transform: none;
+  transition: background-color 110ms ease, opacity 110ms ease;
+}
+
+.transcript-item:hover,
+.transcript-item.is-active {
+  transform: none;
+}
+
+.line-copy,
+.line-translation {
+  transition: color 100ms ease;
+}
+
+.line-word,
+.caption-overlay .caption-word[data-selection] {
+  transition: color 80ms ease, text-shadow 100ms ease;
+}
+
+@media (max-width: 1260px) and (min-width: 921px) {
+  body.workspace-active .practice-grid {
+    grid-template-columns: minmax(0, 1fr) clamp(350px, 31vw, 390px);
+    gap: 14px;
+  }
+
+  body.workspace-active .video-mount {
+    width: 86%;
+  }
+}
+
+@media (max-width: 920px) {
+  body.workspace-active .practice-grid {
+    display: flex;
+  }
+
+  body.workspace-active .video-stage {
+    margin: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  body.workspace-active .video-panel {
+    border-radius: 18px;
+  }
+
+  body.workspace-active .video-mount {
+    width: 92%;
+    border-radius: 12px;
   }
 }

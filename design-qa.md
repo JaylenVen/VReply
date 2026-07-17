@@ -1,35 +1,35 @@
 # Design QA
 
-- Source visual truth: `C:\Users\28022\AppData\Local\Temp\codex-clipboard-df2345f7-d033-4101-83c1-e1a70def5790.png`
-- Implementation screenshot: `C:\Users\28022\.codex\visualizations\2026\07\14\019f605e-1688-71d0-80f1-a6438c63bd7a\vreply-audit\16-final-actual-window.png`
-- Viewport: 2048×983 browser content inside the user's 2048×1024 desktop screenshot.
-- State: landing page, URL submission transition, practice-workspace entrance, and return to landing.
-- Full-view comparison: `C:\Users\28022\.codex\visualizations\2026\07\14\019f605e-1688-71d0-80f1-a6438c63bd7a\vreply-audit\11-full-comparison.png`
-- Focused bottom-region comparison: `C:\Users\28022\.codex\visualizations\2026\07\14\019f605e-1688-71d0-80f1-a6438c63bd7a\vreply-audit\12-bottom-comparison.png`
-- Motion evidence: `07-motion-soft-early.png`, `08-motion-soft-middle.png`, and `09-workspace-stable.png` in the same audit directory.
-- Additional responsive evidence: `15-viewport-1366x768-fixed.png` and `14-viewport-1440x900.png`.
-- Primary interactions tested: entered a valid YouTube URL, submitted it, inspected the staged transition, verified the workspace, and returned home.
-- Console errors checked: 0 errors or warnings.
+- Source visual truth: `C:\Users\28022\AppData\Local\Temp\codex-clipboard-a9404a1a-ad29-4617-899d-01036127f941.png`
+- Implementation screenshot: unavailable; the Codex in-app browser could not connect to the local VReply server and local-file navigation is blocked by browser policy.
+- Intended viewport: 2048×968 browser content, matching the supplied 2048px-wide desktop reference.
+- State: practice workspace, transcript tab active, bilingual subtitles visible, video paused.
+- Full-view comparison evidence: blocked because no browser-rendered implementation screenshot could be captured.
+- Focused region comparison evidence: blocked for the same reason; the player shell, bilingual caption sizes, transcript width, and transcript-tab badge could not be compared visually.
 
 ## Findings
 
-- No actionable P0, P1, or P2 issues remain in the requested layout and import transition.
-- Fonts and typography: the existing IBM Plex Sans and Source Serif hierarchy is preserved; the shorter desktop layout scales the hero without changing its editorial treatment or wrapping.
-- Spacing and layout rhythm: at the user's 983px viewport, the workflow bottom moved from 916px to 865px and the stage floor is now visibly inside the browser viewport. At 1366×768, the workflow ends at 664px with no overflow.
-- Colors and tokens: the black, charcoal, and warm-gold palette remains unchanged. Busy and transition states reuse the existing accent rather than adding a new status color.
-- Image quality and asset fidelity: both supplied 1536×1024 door photographs remain intact. The open-door photograph is revealed with a soft moving mask, avoiding the hard vertical seam found during the first animation pass.
-- Copy and content: all landing copy, input labels, and workflow steps remain unchanged.
-- Accessibility: the form exposes `aria-busy`, the button has a changing accessible label, duplicate submission is blocked, and reduced-motion users receive the short fallback path.
+- No source-level P0 issue was found in the requested interactions: transcript and summary sentence jumps now pass the current playback state into the seek operation, and the seek operation explicitly preserves play or pause.
+- The requested layout and typography values are present in the final CSS cascade: one visible outer video shell, a 400–540px desktop transcript column, 17px base caption translation, 12.5px base transcript translation, and 13.5px active transcript translation at 100% scale.
+- The transcript count is hidden whenever the transcript tab is not active.
+- Performance changes are present but need browser profiling for final confirmation: off-screen transcript rows use `content-visibility`, smooth scrolling and per-row layout transforms were removed, active-row lookup is cached, word segmentation is reused, and hover lookup pauses while the transcript is scrolling.
+- Automated verification passed: `node --check app.js` and all 34 Python unit tests.
 
-## Comparison history
+## Open Questions
 
-1. The restored implementation only compressed layouts at `max-height: 900px`; the user's measured viewport was 983px, so the rule did not run. The workflow ended at 916px and the image crop placed the floor directly against the taskbar.
-2. The desktop trigger was expanded to 1050px, the header and hero were compacted, the workflow received a larger bottom safety distance, and the source image was reframed to show the floor. Post-fix evidence shows the workflow ending at 865px at the user's viewport.
-3. The first revised door reveal used a sharp clip edge. It was replaced with a soft mask progression and recaptured at early and middle states.
-4. A 1366×768 emulation exposed a stale JavaScript viewport value during rapid resizing. CSS now clamps that value to `100dvh`; the final 1366×768 capture has no hidden controls or page overflow.
+- Browser-rendered spacing, exact visual fidelity, and subjective scroll/hover smoothness remain unverified because the required local browser capture was unavailable.
 
-## Follow-up polish
+## Implementation Checklist
 
-- No remaining P3 item is required for this scope.
+- Capture the updated workspace at 2048×968 when local browser access is available.
+- Compare it side by side with the supplied reference.
+- Exercise paused sentence switching, playing sentence switching, transcript scrolling, word hover, and transcript/summary badge visibility.
+- Fix any resulting P0/P1/P2 differences and repeat the comparison.
 
-final result: passed
+## Comparison History
+
+1. The reference image was opened at original resolution and used to define the intended single-shell player hierarchy and wider transcript proportion.
+2. The implementation was updated and passed syntax plus unit tests.
+3. Browser navigation to the local server failed, so no post-fix visual comparison could be completed.
+
+final result: blocked

@@ -7,8 +7,8 @@
   const TRANSLATION_ENGINE_KEY = "vreply:translation-engine";
   const PRONUNCIATION_ACCENT_KEY = "vreply:pronunciation-accent";
   const SUBTITLE_STYLE_KEY = "vreply:subtitle-style";
-  const HOVER_LOOKUP_DELAY_MS = 650;
-  const HOVER_MOTION_TOLERANCE_PX = 6;
+  const HOVER_LOOKUP_DELAY_MS = 180;
+  const WORD_SEGMENTERS = new Map();
   const DEFAULT_SUBTITLE_STYLE = Object.freeze({
     scale: 100,
     originalFont: "inter",
@@ -347,6 +347,8 @@
     learningLanguage: INITIAL_LEARNING_LANGUAGE,
     source: null,
     transcript: [],
+    transcriptNodes: [],
+    activeTranscriptNode: null,
     activeIndex: -1,
     currentTime: 0,
     duration: DEFAULT_DURATION,
@@ -407,6 +409,8 @@
     hoverLookupCandidate: null,
     hoverLookupPoint: null,
     hoverLookupTarget: null,
+    transcriptScrolling: false,
+    transcriptScrollTimer: null,
     panelView: "transcript",
     summaryController: null,
     summaryLoading: false,
@@ -606,6 +610,8 @@
     const token = ++state.loadToken;
     state.source = source;
     state.transcript = [];
+    state.transcriptNodes = [];
+    state.activeTranscriptNode = null;
     state.activeIndex = -1;
     state.currentTime = 0;
     state.duration = DEFAULT_DURATION;
@@ -633,6 +639,9 @@
     state.hoverLookupCandidate = null;
     state.hoverLookupPoint = null;
     state.hoverLookupTarget = null;
+    if (state.transcriptScrollTimer) window.clearTimeout(state.transcriptScrollTimer);
+    state.transcriptScrollTimer = null;
+    state.transcriptScrolling = false;
     state.studyOverlay = null;
     state.resumeAfterStudy = false;
     if (state.translationTimer) window.clearTimeout(state.translationTimer);
@@ -864,6 +873,8 @@
   function showTranscriptionFailure(error) {
     const message = userMessage(error && error.message, "暂时无法为这个视频生成字幕。");
     state.transcript = [];
+    state.transcriptNodes = [];
+    state.activeTranscriptNode = null;
     state.transcriptId = null;
     state.activeIndex = -1;
     elements.transcriptSkeleton.classList.add("is-hidden");
@@ -1110,19 +1121,24 @@
 
   function seekTo(value, options) {
     const config = options || {};
+    const hasPlaybackPreference = typeof config.play === "boolean";
     const nextTime = Math.max(0, Math.min(Number(value) || 0, state.duration || 0));
     state.currentTime = nextTime;
 
     if (state.playerKind === "youtube" && state.playerReady && state.ytPlayer) {
       state.ytPlayer.seekTo(nextTime, true);
       if (config.play) state.ytPlayer.playVideo();
+      else if (hasPlaybackPreference) state.ytPlayer.pauseVideo();
     } else if (state.playerKind === "direct" && state.playerReady && state.directPlayer) {
       state.directPlayer.currentTime = nextTime;
       if (config.play) state.directPlayer.play().catch(handlePlayerError);
+      else if (hasPlaybackPreference) state.directPlayer.pause();
     } else if (config.play) {
       state.simulatedPlayback = true;
       state.lastTickAt = performance.now();
       setPlaying(true);
+    } else if (hasPlaybackPreference) {
+      setPlaying(false);
     }
 
     updatePlaybackUI(nextTime, true);
@@ -1213,11 +1229,12 @@
       closeSentenceAnalysis();
     }
     const changed = index !== state.activeIndex;
-    const previous = elements.transcriptList.querySelector(".transcript-item.is-active");
+    const previous = state.activeTranscriptNode;
     if (previous) {
       previous.classList.remove("is-active");
       previous.removeAttribute("aria-current");
     }
+    state.activeTranscriptNode = null;
 
     if (index < 0 || !state.transcript[index]) {
       state.activeIndex = -1;
@@ -1231,16 +1248,13 @@
 
     state.activeIndex = index;
     state.lastCaptionWord = -1;
-    const item = elements.transcriptList.querySelector(`.transcript-item[data-index="${index}"]`);
+    const item = state.transcriptNodes[index];
     if (item) {
+      state.activeTranscriptNode = item;
       item.classList.add("is-active");
       item.setAttribute("aria-current", "true");
-      if (changed) {
-        item.classList.add("is-entering");
-        item.addEventListener("animationend", () => item.classList.remove("is-entering"), { once: true });
-      }
-      if (state.autoFollow && !elements.transcriptSearch.value.trim()) {
-        item.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (changed && state.autoFollow && !elements.transcriptSearch.value.trim()) {
+        keepActiveTranscriptInView(item);
       }
     }
 
@@ -1248,6 +1262,19 @@
     elements.captionOverlay.classList.add("is-visible");
     renderCaptionWords(segment);
     updateCaptionTranslation(index);
+  }
+
+  function keepActiveTranscriptInView(item) {
+    const viewport = elements.transcriptScroll;
+    const itemTop = item.offsetTop;
+    const itemBottom = itemTop + item.offsetHeight;
+    const comfortableTop = viewport.scrollTop + viewport.clientHeight * 0.24;
+    const comfortableBottom = viewport.scrollTop + viewport.clientHeight * 0.76;
+    if (itemTop >= comfortableTop && itemBottom <= comfortableBottom) return;
+    viewport.scrollTo({
+      top: Math.max(0, itemTop - (viewport.clientHeight - item.offsetHeight) / 2),
+      behavior: "auto",
+    });
   }
 
   function makeCaptionWord(word, index, total) {
@@ -1322,6 +1349,7 @@
     ) clearHoverLookup();
     const normalizedQuery = String(query || "").trim().toLowerCase();
     const fragment = document.createDocumentFragment();
+    const transcriptNodes = [];
     let resultCount = 0;
 
     state.transcript.forEach((segment, index) => {
@@ -1361,9 +1389,12 @@
 
       item.append(time, content);
       fragment.appendChild(item);
+      transcriptNodes[index] = item;
     });
 
     elements.transcriptList.replaceChildren(fragment);
+    state.transcriptNodes = transcriptNodes;
+    state.activeTranscriptNode = transcriptNodes[state.activeIndex] || null;
     elements.searchResultCount.textContent = String(resultCount);
     elements.transcriptEmpty.classList.toggle("is-hidden", resultCount > 0);
     resetTranslationObserver();
@@ -1509,7 +1540,12 @@
     const value = String(text || "");
     let parts = [];
     if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
-      const segmenter = new Intl.Segmenter(learningLanguage().locale, { granularity: "word" });
+      const locale = learningLanguage().locale;
+      let segmenter = WORD_SEGMENTERS.get(locale);
+      if (!segmenter) {
+        segmenter = new Intl.Segmenter(locale, { granularity: "word" });
+        WORD_SEGMENTERS.set(locale, segmenter);
+      }
       parts = Array.from(segmenter.segment(value)).map((part) => ({
         text: part.segment,
         isWordLike: Boolean(part.isWordLike),
@@ -2105,11 +2141,11 @@
     root.style.setProperty("--caption-original-size", `${(23 * scale).toFixed(1)}px`);
     root.style.setProperty("--caption-original-long-size", `${(20 * scale).toFixed(1)}px`);
     root.style.setProperty("--caption-original-very-long-size", `${(18 * scale).toFixed(1)}px`);
-    root.style.setProperty("--caption-translation-size", `${(14 * scale).toFixed(1)}px`);
+    root.style.setProperty("--caption-translation-size", `${(17 * scale).toFixed(1)}px`);
     root.style.setProperty("--transcript-original-size", `${(14 * scale).toFixed(1)}px`);
     root.style.setProperty("--transcript-active-size", `${(16.5 * scale).toFixed(1)}px`);
-    root.style.setProperty("--transcript-translation-size", `${(10.5 * scale).toFixed(1)}px`);
-    root.style.setProperty("--transcript-active-translation-size", `${(11.5 * scale).toFixed(1)}px`);
+    root.style.setProperty("--transcript-translation-size", `${(12.5 * scale).toFixed(1)}px`);
+    root.style.setProperty("--transcript-active-translation-size", `${(13.5 * scale).toFixed(1)}px`);
     root.style.setProperty("--subtitle-original-font", ORIGINAL_FONTS[style.originalFont]);
     root.style.setProperty("--subtitle-translation-font", TRANSLATION_FONTS[style.translationFont]);
     root.style.setProperty("--subtitle-translation-color", style.translationColor);
@@ -2981,6 +3017,8 @@
     setImportBusy(false);
     state.source = null;
     state.transcript = [];
+    state.transcriptNodes = [];
+    state.activeTranscriptNode = null;
     state.transcriptId = null;
     state.activeIndex = -1;
     state.showTranslations = false;
@@ -2996,6 +3034,9 @@
     state.hoverLookupCandidate = null;
     state.hoverLookupPoint = null;
     state.hoverLookupTarget = null;
+    if (state.transcriptScrollTimer) window.clearTimeout(state.transcriptScrollTimer);
+    state.transcriptScrollTimer = null;
+    state.transcriptScrolling = false;
     state.studyOverlay = null;
     state.resumeAfterStudy = false;
     state.translationControllers.forEach((controller) => controller.abort());
@@ -3129,7 +3170,7 @@
   }
 
   function scheduleHoverLookup(target, event) {
-    if (!target || target === state.hoverLookupTarget) return;
+    if (state.transcriptScrolling || !target || target === state.hoverLookupTarget) return;
     if (state.hoverLookupTarget) clearHoverLookup();
     clearHoverLookupTimer();
     state.hoverLookupCandidate = target;
@@ -3302,7 +3343,7 @@
     const point = event.target.closest(".summary-point");
     if (!point) return;
     const segment = state.transcript[Number(point.dataset.index)];
-    if (segment) seekTo(segment.start, { play: true });
+    if (segment) seekTo(segment.start, { play: state.playing });
   });
 
   elements.transcriptList.addEventListener("pointerdown", (event) => {
@@ -3382,7 +3423,7 @@
     if (!item) return;
     const index = Number(item.dataset.index);
     const segment = state.transcript[index];
-    if (segment) seekTo(segment.start, { play: true });
+    if (segment) seekTo(segment.start, { play: state.playing });
   });
   elements.transcriptList.addEventListener("pointerup", () => window.setTimeout(lookupSelectedPhrase, 0));
   elements.transcriptList.addEventListener("keydown", (event) => {
@@ -3409,23 +3450,22 @@
     }
     if (related) scheduleHoverLookup(related, event);
   });
-  elements.workspaceView.addEventListener("pointermove", (event) => {
-    const target = subtitleLookupTarget(event.target);
-    if (!target) {
-      if (state.hoverLookupCandidate || state.hoverLookupTarget) clearHoverLookup();
-      return;
-    }
-    if (state.hoverLookupTarget && target !== state.hoverLookupTarget) {
+  elements.transcriptScroll.addEventListener("scroll", () => {
+    if (!state.transcriptScrolling) {
+      state.transcriptScrolling = true;
       clearHoverLookup();
-      scheduleHoverLookup(target, event);
-      return;
     }
-    if (target !== state.hoverLookupCandidate || !state.hoverLookupPoint) return;
-    const distance = Math.hypot(
-      event.clientX - state.hoverLookupPoint.x,
-      event.clientY - state.hoverLookupPoint.y
-    );
-    if (distance >= HOVER_MOTION_TOLERANCE_PX) scheduleHoverLookup(target, event);
+    if (state.transcriptScrollTimer) window.clearTimeout(state.transcriptScrollTimer);
+    state.transcriptScrollTimer = window.setTimeout(() => {
+      state.transcriptScrolling = false;
+      state.transcriptScrollTimer = null;
+    }, 120);
+  }, { passive: true });
+
+  elements.workspaceView.addEventListener("pointermove", (event) => {
+    if (state.transcriptScrolling || event.target.closest("#transcriptScroll")) return;
+    const target = subtitleLookupTarget(event.target);
+    if (!target && (state.hoverLookupCandidate || state.hoverLookupTarget)) clearHoverLookup();
   });
   elements.workspaceView.addEventListener("mouseleave", () => clearHoverLookup());
   window.addEventListener("blur", () => clearHoverLookup());
