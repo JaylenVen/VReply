@@ -8,6 +8,9 @@
   const PRONUNCIATION_ACCENT_KEY = "vreply:pronunciation-accent";
   const SUBTITLE_STYLE_KEY = "vreply:subtitle-style";
   const SAVED_WORDS_KEY = "vreply:saved-words:v1";
+  const LEARNING_TIME_KEY = "vreply:learning-time:v1";
+  const LEARNING_TIME_FLUSH_MS = 5000;
+  const KEYBOARD_REWIND_START_WINDOW = 0.8;
   const HOVER_LOOKUP_DELAY_MS = 180;
   const WORD_SEGMENTERS = new Map();
   const DEFAULT_SUBTITLE_STYLE = Object.freeze({
@@ -198,11 +201,38 @@
     }
   }
 
+  function localDateKey(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function initialLearningTime() {
+    const today = localDateKey();
+    try {
+      const saved = JSON.parse(localStorage.getItem(LEARNING_TIME_KEY) || "null");
+      if (!saved || typeof saved !== "object") return { totalMs: 0, day: today, todayMs: 0 };
+      return {
+        totalMs: Math.max(0, Number(saved.totalMs) || 0),
+        day: today,
+        todayMs: saved.day === today ? Math.max(0, Number(saved.todayMs) || 0) : 0,
+      };
+    } catch (_error) {
+      return { totalMs: 0, day: today, todayMs: 0 };
+    }
+  }
+
   const elements = {
     landingView: document.getElementById("landingView"),
     workspaceView: document.getElementById("workspaceView"),
     brandButton: document.getElementById("brandButton"),
     newVideoButton: document.getElementById("newVideoButton"),
+    learningTimeButton: document.getElementById("learningTimeButton"),
+    learningTimeButtonValue: document.getElementById("learningTimeButtonValue"),
+    learningTimePanel: document.getElementById("learningTimePanel"),
+    learningTimeTotal: document.getElementById("learningTimeTotal"),
+    learningTimeToday: document.getElementById("learningTimeToday"),
     aiSettingsButton: document.getElementById("aiSettingsButton"),
     aiSettingsModal: document.getElementById("aiSettingsModal"),
     aiSettingsClose: document.getElementById("aiSettingsClose"),
@@ -445,11 +475,85 @@
     summaryController: null,
     summaryLoading: false,
     summaryTranscriptId: null,
+    keyboardRewindIndex: null,
   };
 
   let youTubeApiPromise = null;
   let colorPickerHsv = { h: 40, s: 0.13, v: 0.85 };
   let colorPickerDragging = false;
+  const learningTime = initialLearningTime();
+  let learningTimeStartedAt = null;
+
+  function learningTimeIsActive() {
+    return document.visibilityState === "visible" && document.hasFocus();
+  }
+
+  function refreshLearningTimeDay() {
+    const today = localDateKey();
+    if (learningTime.day === today) return;
+    learningTime.day = today;
+    learningTime.todayMs = 0;
+  }
+
+  function formatLearningTime(milliseconds) {
+    const minutes = Math.floor(Math.max(0, milliseconds) / 60000);
+    if (minutes < 1) return "少于 1 分钟";
+    if (minutes < 60) return `${minutes} 分钟`;
+    const hours = Math.floor(minutes / 60);
+    const remainder = minutes % 60;
+    return remainder ? `${hours} 小时 ${remainder} 分` : `${hours} 小时`;
+  }
+
+  function renderLearningTime() {
+    refreshLearningTimeDay();
+    const pending = learningTimeStartedAt === null ? 0 : Math.max(0, Date.now() - learningTimeStartedAt);
+    elements.learningTimeButtonValue.textContent = formatLearningTime(learningTime.totalMs + pending);
+    elements.learningTimeTotal.textContent = formatLearningTime(learningTime.totalMs + pending);
+    elements.learningTimeToday.textContent = formatLearningTime(learningTime.todayMs + pending);
+  }
+
+  function saveLearningTime() {
+    try {
+      localStorage.setItem(LEARNING_TIME_KEY, JSON.stringify({
+        totalMs: Math.round(learningTime.totalMs),
+        day: learningTime.day,
+        todayMs: Math.round(learningTime.todayMs),
+      }));
+    } catch (_error) {
+      // The current session still remains visible when local storage is unavailable.
+    }
+  }
+
+  function flushLearningTime() {
+    refreshLearningTimeDay();
+    if (learningTimeStartedAt !== null) {
+      const now = Date.now();
+      const elapsed = Math.max(0, now - learningTimeStartedAt);
+      learningTime.totalMs += elapsed;
+      learningTime.todayMs += elapsed;
+      learningTimeStartedAt = learningTimeIsActive() ? now : null;
+    }
+    saveLearningTime();
+    renderLearningTime();
+  }
+
+  function syncLearningTimeTracking() {
+    if (learningTimeIsActive()) {
+      if (learningTimeStartedAt === null) learningTimeStartedAt = Date.now();
+    } else {
+      flushLearningTime();
+      learningTimeStartedAt = null;
+    }
+    renderLearningTime();
+  }
+
+  function setLearningTimePanel(open) {
+    elements.learningTimePanel.classList.toggle("is-hidden", !open);
+    elements.learningTimeButton.setAttribute("aria-expanded", String(open));
+    if (open) {
+      renderLearningTime();
+    }
+  }
 
   function learningLanguage() {
     return LEARNING_LANGUAGES[state.learningLanguage] || LEARNING_LANGUAGES.en;
@@ -1432,14 +1536,41 @@
     resetTranslationObserver();
   }
 
-  function jumpSentence(direction) {
-    if (!state.transcript.length) return;
+  function currentSentenceIndex() {
     let currentIndex = state.activeIndex;
     if (currentIndex < 0) {
       currentIndex = state.transcript.findIndex((segment) => segment.start > state.currentTime) - 1;
       if (currentIndex < 0 && state.currentTime >= state.transcript[0].start) currentIndex = 0;
     }
+    return currentIndex;
+  }
+
+  function resetKeyboardRewindChain() {
+    state.keyboardRewindIndex = null;
+  }
+
+  function jumpSentence(direction) {
+    if (!state.transcript.length) return;
+    resetKeyboardRewindChain();
+    const currentIndex = currentSentenceIndex();
     const targetIndex = Math.max(0, Math.min(state.transcript.length - 1, currentIndex + direction));
+    seekTo(state.transcript[targetIndex].start, { play: state.playing });
+  }
+
+  function rewindSentenceFromKeyboard() {
+    if (!state.transcript.length) return;
+    const currentIndex = Math.max(0, currentSentenceIndex());
+    const previousTarget = state.keyboardRewindIndex === null
+      ? null
+      : state.transcript[state.keyboardRewindIndex];
+    const isContinuing = state.keyboardRewindIndex !== null
+      && state.activeIndex === state.keyboardRewindIndex
+      && previousTarget
+      && Math.abs(state.currentTime - previousTarget.start) <= KEYBOARD_REWIND_START_WINDOW;
+    const targetIndex = isContinuing
+      ? Math.max(0, state.keyboardRewindIndex - 1)
+      : currentIndex;
+    state.keyboardRewindIndex = targetIndex;
     seekTo(state.transcript[targetIndex].start, { play: state.playing });
   }
 
@@ -3547,6 +3678,9 @@
   });
 
   elements.videoUrl.addEventListener("input", clearFieldError);
+  elements.learningTimeButton.addEventListener("click", () => {
+    setLearningTimePanel(elements.learningTimePanel.classList.contains("is-hidden"));
+  });
   elements.aiSettingsButton.addEventListener("click", () => openAiSettings());
   elements.aiSettingsClose.addEventListener("click", () => closeAiSettings());
   elements.aiSettingsForm.addEventListener("submit", saveAiSettings);
@@ -3856,10 +3990,16 @@
     if (!target && (state.hoverLookupCandidate || state.hoverLookupTarget)) clearHoverLookup();
   });
   elements.workspaceView.addEventListener("mouseleave", () => clearHoverLookup());
-  window.addEventListener("blur", () => clearHoverLookup());
+  window.addEventListener("blur", () => {
+    clearHoverLookup();
+    syncLearningTimeTracking();
+  });
+  window.addEventListener("focus", syncLearningTimeTracking);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) clearHoverLookup();
+    syncLearningTimeTracking();
   });
+  window.addEventListener("pagehide", flushLearningTime);
   elements.workspaceView.addEventListener("focusin", (event) => {
     const word = subtitleLookupTarget(event.target);
     if (word) scheduleWordPreview(word);
@@ -3869,6 +4009,8 @@
   });
 
   document.addEventListener("pointerdown", (event) => {
+    resetKeyboardRewindChain();
+    if (!event.target.closest(".learning-time-wrap")) setLearningTimePanel(false);
     if (!event.target.closest(".tuning-menu")) closeTuningPopovers();
     if (!event.target.closest("[data-font-select]")) closeFontSelects();
     if (!event.target.closest(".custom-color-picker")) closeColorPicker();
@@ -3894,8 +4036,16 @@
   setPlaybackSpeed(SPEEDS.indexOf(state.speed));
   setVolume(state.volume);
   renderSavedWords();
+  syncLearningTimeTracking();
+  window.setInterval(flushLearningTime, LEARNING_TIME_FLUSH_MS);
 
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !elements.learningTimePanel.classList.contains("is-hidden")) {
+      event.preventDefault();
+      setLearningTimePanel(false);
+      elements.learningTimeButton.focus();
+      return;
+    }
     if (event.key === "Escape" && (
       !elements.subtitleColorPicker.classList.contains("is-hidden")
       || document.querySelector(".font-select-popover:not(.is-hidden)")
@@ -3936,11 +4086,12 @@
 
     if (event.code === "Space") {
       event.preventDefault();
+      resetKeyboardRewindChain();
       togglePlay();
     }
     if (event.code === "ArrowLeft") {
       event.preventDefault();
-      jumpSentence(-1);
+      rewindSentenceFromKeyboard();
     }
     if (event.code === "ArrowRight") {
       event.preventDefault();

@@ -171,9 +171,94 @@ svg {
 }
 
 .header-actions {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.learning-time-wrap {
+  position: relative;
+}
+
+.learning-time-button b {
+  color: var(--acid);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.learning-time-button span::after {
+  margin: 0 1px 0 8px;
+  color: rgba(255, 255, 255, 0.24);
+  content: "·";
+}
+
+.learning-time-panel {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 12px);
+  right: 0;
+  width: min(300px, calc(100vw - 34px));
+  padding: 17px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(var(--accent-rgb), 0.08), transparent 45%),
+    rgba(18, 18, 15, 0.97);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(20px);
+  animation: learning-time-in 180ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.learning-time-panel header,
+.learning-time-today {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.learning-time-panel header > span {
+  color: var(--acid);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+}
+
+.learning-time-total {
+  padding: 24px 0 21px;
+}
+
+.learning-time-total span,
+.learning-time-today span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.learning-time-total strong {
+  display: block;
+  margin-top: 7px;
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: 560;
+  letter-spacing: -0.045em;
+}
+
+.learning-time-today {
+  padding: 13px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.learning-time-today strong {
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@keyframes learning-time-in {
+  from { opacity: 0; transform: translateY(-5px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .quiet-button {
@@ -6416,6 +6501,20 @@ html.workspace-view-transition::view-transition-new(root) {
 }
 
 @media (max-width: 600px) {
+  .learning-time-button > span {
+    display: none;
+  }
+
+  .learning-time-button b {
+    font-size: 10px;
+  }
+
+  .learning-time-panel {
+    position: fixed;
+    top: 66px;
+    right: 12px;
+  }
+
   body:not(.workspace-active) .site-header {
     height: 72px;
     padding: 0 17px;
