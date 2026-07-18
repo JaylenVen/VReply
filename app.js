@@ -7,6 +7,7 @@
   const TRANSLATION_ENGINE_KEY = "vreply:translation-engine";
   const PRONUNCIATION_ACCENT_KEY = "vreply:pronunciation-accent";
   const SUBTITLE_STYLE_KEY = "vreply:subtitle-style";
+  const SAVED_WORDS_KEY = "vreply:saved-words:v1";
   const HOVER_LOOKUP_DELAY_MS = 180;
   const WORD_SEGMENTERS = new Map();
   const DEFAULT_SUBTITLE_STYLE = Object.freeze({
@@ -181,6 +182,22 @@
     }
   }
 
+  function initialSavedWords() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SAVED_WORDS_KEY) || "[]");
+      if (!Array.isArray(saved)) return [];
+      return saved.filter((item) => (
+        item
+        && typeof item === "object"
+        && typeof item.id === "string"
+        && typeof item.term === "string"
+        && typeof item.sentence === "string"
+      ));
+    } catch (_error) {
+      return [];
+    }
+  }
+
   const elements = {
     landingView: document.getElementById("landingView"),
     workspaceView: document.getElementById("workspaceView"),
@@ -297,6 +314,15 @@
     languageStatus: document.getElementById("languageStatus"),
     transcriptTab: document.getElementById("transcriptTab"),
     summaryTab: document.getElementById("summaryTab"),
+    wordbookTab: document.getElementById("wordbookTab"),
+    wordbookCount: document.getElementById("wordbookCount"),
+    wordbookView: document.getElementById("wordbookView"),
+    wordbookSearchButton: document.getElementById("wordbookSearchButton"),
+    wordbookSearchRow: document.getElementById("wordbookSearchRow"),
+    wordbookSearchInput: document.getElementById("wordbookSearchInput"),
+    wordbookList: document.getElementById("wordbookList"),
+    wordbookEmpty: document.getElementById("wordbookEmpty"),
+    wordbookEmptyText: document.getElementById("wordbookEmptyText"),
     summaryView: document.getElementById("summaryView"),
     summaryTitle: document.getElementById("summaryTitle"),
     summaryOverview: document.getElementById("summaryOverview"),
@@ -305,6 +331,7 @@
     summaryRetryButton: document.getElementById("summaryRetryButton"),
     dictionaryCard: document.getElementById("dictionaryCard"),
     dictionaryClose: document.getElementById("dictionaryClose"),
+    dictionaryFavorite: document.getElementById("dictionaryFavorite"),
     dictionaryTerm: document.getElementById("dictionaryTerm"),
     dictionaryMeta: document.getElementById("dictionaryMeta"),
     dictionaryStatus: document.getElementById("dictionaryStatus"),
@@ -394,6 +421,9 @@
     localDictionaryCache: new Map(),
     dictionaryController: null,
     dictionaryRequestId: 0,
+    dictionaryLookup: null,
+    savedWords: initialSavedWords(),
+    wordbookExpanded: new Set(),
     wordPreviewTimer: null,
     wordPreviewController: null,
     wordPreviewTarget: null,
@@ -494,6 +524,11 @@
     }
     discardChromeTranslator();
     syncLearningLanguageUi();
+    elements.wordbookSearchInput.value = "";
+    elements.wordbookSearchRow.classList.add("is-hidden");
+    elements.wordbookSearchButton.classList.remove("is-active");
+    elements.wordbookSearchButton.setAttribute("aria-expanded", "false");
+    renderSavedWords();
     updateTranslationToggle();
     detectChromeTranslationAvailability();
   }
@@ -1516,21 +1551,32 @@
 
   function setPanelView(view) {
     const showSummary = view === "summary";
-    state.panelView = showSummary ? "summary" : "transcript";
-    elements.transcriptTab.classList.toggle("is-active", !showSummary);
+    const showWordbook = view === "wordbook";
+    const showTranscript = !showSummary && !showWordbook;
+    state.panelView = showSummary ? "summary" : showWordbook ? "wordbook" : "transcript";
+    elements.transcriptTab.classList.toggle("is-active", showTranscript);
     elements.summaryTab.classList.toggle("is-active", showSummary);
-    elements.transcriptTab.setAttribute("aria-selected", String(!showSummary));
+    elements.wordbookTab.classList.toggle("is-active", showWordbook);
+    elements.transcriptTab.setAttribute("aria-selected", String(showTranscript));
     elements.summaryTab.setAttribute("aria-selected", String(showSummary));
-    elements.transcriptTab.tabIndex = showSummary ? -1 : 0;
+    elements.wordbookTab.setAttribute("aria-selected", String(showWordbook));
+    elements.transcriptTab.tabIndex = showTranscript ? 0 : -1;
     elements.summaryTab.tabIndex = showSummary ? 0 : -1;
-    elements.transcriptScroll.classList.toggle("is-hidden", showSummary);
+    elements.wordbookTab.tabIndex = showWordbook ? 0 : -1;
+    elements.transcriptScroll.classList.toggle("is-hidden", !showTranscript);
     elements.summaryView.classList.toggle("is-hidden", !showSummary);
+    elements.wordbookView.classList.toggle("is-hidden", !showWordbook);
     elements.transcriptPanel.classList.toggle("is-summary", showSummary);
-    elements.transcriptPanel.setAttribute("aria-label", showSummary ? "视频内容简介" : "逐句字幕");
-    if (showSummary) {
+    elements.transcriptPanel.classList.toggle("is-wordbook", showWordbook);
+    elements.transcriptPanel.setAttribute(
+      "aria-label",
+      showSummary ? "视频内容简介" : showWordbook ? "收藏的单词" : "逐句字幕"
+    );
+    if (!showTranscript) {
       closeDictionary();
-      loadAiSummary();
     }
+    if (showSummary) loadAiSummary();
+    if (showWordbook) renderSavedWords();
   }
 
   function appendLookupWords(container, text, lineIndex) {
@@ -2355,12 +2401,318 @@
     }
   }
 
-  function openDictionary(selection) {
+  function savedWordId(selection, languageCode) {
+    const language = LEARNING_LANGUAGES[languageCode] || LEARNING_LANGUAGES.en;
+    return `${language.code}:${String(selection || "").normalize("NFKC").toLocaleLowerCase(language.locale).trim()}`;
+  }
+
+  function savedWordLanguage(record) {
+    if (LEARNING_LANGUAGES[record.language]) return record.language;
+    const idLanguage = String(record.id || "").split(":", 1)[0];
+    return LEARNING_LANGUAGES[idLanguage] ? idLanguage : "en";
+  }
+
+  function dictionaryEntrySnapshot(entry) {
+    const snapshot = {};
+    [
+      "source",
+      "dictionary",
+      "selection",
+      "headword",
+      "partOfSpeech",
+      "pronunciation",
+      "pronunciationUS",
+      "pronunciationUK",
+      "meaning",
+      "englishMeaning",
+      "contextMeaning",
+      "example",
+      "exampleTranslation",
+      "senses",
+      "wordForms",
+      "etymology",
+      "phrases",
+      "synonyms",
+      "wordFamily",
+    ].forEach((key) => {
+      if (entry[key] !== undefined) snapshot[key] = entry[key];
+    });
+    return snapshot;
+  }
+
+  function persistSavedWords(words) {
+    try {
+      localStorage.setItem(SAVED_WORDS_KEY, JSON.stringify(words));
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function updateDictionaryFavoriteButton() {
+    const lookup = state.dictionaryLookup;
+    const ready = Boolean(lookup && lookup.entry);
+    const isSaved = ready && state.savedWords.some((item) => item.id === savedWordId(lookup.selection, lookup.language));
+    elements.dictionaryFavorite.disabled = !ready;
+    elements.dictionaryFavorite.classList.toggle("is-saved", isSaved);
+    elements.dictionaryFavorite.setAttribute("aria-pressed", String(isSaved));
+    elements.dictionaryFavorite.setAttribute("aria-label", isSaved ? "取消收藏这个单词" : "收藏这个单词");
+  }
+
+  function setSavedWords(words) {
+    state.savedWords = words;
+    renderSavedWords();
+    updateDictionaryFavoriteButton();
+    return persistSavedWords(words);
+  }
+
+  function removeSavedWord(id, announce = true) {
+    const existing = state.savedWords.find((item) => item.id === id);
+    if (!existing) return;
+    state.wordbookExpanded.delete(id);
+    const persisted = setSavedWords(state.savedWords.filter((item) => item.id !== id));
+    if (announce) {
+      showToast(
+        persisted ? "已移除单词" : "仅在当前页面移除",
+        persisted ? `${existing.term} 已从单词本中删除。` : "浏览器阻止了永久储存，请检查隐私设置。"
+      );
+    }
+  }
+
+  function toggleDictionaryFavorite() {
+    const lookup = state.dictionaryLookup;
+    if (!lookup || !lookup.entry) return;
+    const id = savedWordId(lookup.selection, lookup.language);
+    if (state.savedWords.some((item) => item.id === id)) {
+      removeSavedWord(id);
+      return;
+    }
+
+    const segment = state.transcript[lookup.index];
+    if (!segment) return;
+    const translation = state.translations.get(lookup.index);
+    const record = {
+      id,
+      term: String(lookup.entry.headword || lookup.entry.selection || lookup.selection),
+      selection: lookup.selection,
+      language: lookup.language,
+      entry: dictionaryEntrySnapshot(lookup.entry),
+      sentence: segment.text,
+      sentenceTranslation: translation ? translation.text : "",
+      segmentStart: segment.start,
+      videoUrl: state.source ? state.source.url : "",
+      savedAt: Date.now(),
+    };
+    const persisted = setSavedWords([record, ...state.savedWords]);
+    showToast(
+      persisted ? "已收藏单词" : "已暂存到当前页面",
+      persisted ? `${record.term} 会保留在“单词”中。` : "浏览器阻止了永久储存，请检查隐私设置。"
+    );
+  }
+
+  function svgIcon(pathData) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", pathData);
+    svg.appendChild(path);
+    return svg;
+  }
+
+  function abbreviatedPartOfSpeech(value) {
+    const partOfSpeech = String(value || "").toLocaleLowerCase("en");
+    const abbreviations = [
+      [/phrasal verb|短语动词/, "phr. v."],
+      [/modal verb|情态动词/, "modal v."],
+      [/pronoun|代词|(^|[\s/])pron\./, "pron."],
+      [/adverb|副词|(^|[\s/])adv\./, "adv."],
+      [/adjective|形容词|(^|[\s/])(adj|a)\./, "adj."],
+      [/preposition|介词|(^|[\s/])prep\./, "prep."],
+      [/conjunction|连词|(^|[\s/])conj\./, "conj."],
+      [/interjection|感叹词|(^|[\s/])interj\./, "interj."],
+      [/determiner|限定词|(^|[\s/])det\./, "det."],
+      [/article|冠词|(^|[\s/])art\./, "art."],
+      [/numeral|数词|(^|[\s/])num\./, "num."],
+      [/verb|动词|及物|不及物|(^|[\s/])(v|vi|vt)\./, "v."],
+      [/noun|名词|(^|[\s/])n\./, "n."],
+      [/phrase|短语|(^|[\s/])phr\./, "phr."],
+    ];
+    return abbreviations.find(([pattern]) => pattern.test(partOfSpeech))?.[1] || "def.";
+  }
+
+  function englishDefinitionLines(value) {
+    return String(value || "")
+      .split(/\s*(?:\r?\n|;)\s*/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+
+  function savedWordSenseElements(entry) {
+    const senses = Array.isArray(entry.senses) && entry.senses.length
+      ? entry.senses
+      : [{
+          partOfSpeech: entry.partOfSpeech,
+          meaning: entry.meaning,
+          englishDefinition: entry.englishMeaning,
+        }];
+    return senses.map((sense) => {
+      const row = document.createElement("section");
+      row.className = "wordbook-sense";
+      const heading = document.createElement("span");
+      heading.textContent = abbreviatedPartOfSpeech(sense.partOfSpeech || entry.partOfSpeech);
+      const meaning = document.createElement("p");
+      meaning.textContent = sense.meaning || "";
+      const definitions = document.createElement("div");
+      definitions.className = "wordbook-english-definitions";
+      definitions.replaceChildren(...englishDefinitionLines(sense.englishDefinition).map((definition) => {
+        const line = document.createElement("small");
+        line.textContent = definition;
+        return line;
+      }));
+      row.append(heading, meaning, definitions);
+      return row;
+    });
+  }
+
+  function savedWordPronunciations(record, entry) {
+    const language = LEARNING_LANGUAGES[record.language] || LEARNING_LANGUAGES.en;
+    const fallback = entry.pronunciation || "";
+    const values = [entry.pronunciationUS || fallback, entry.pronunciationUK || fallback];
+    const container = document.createElement("div");
+    container.className = "wordbook-pronunciations";
+    language.accents.forEach((accent, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.accent = accent.value;
+      button.dataset.term = record.term;
+      button.setAttribute("aria-label", `播放${accent.label}`);
+      const badge = document.createElement("b");
+      badge.textContent = accent.badge;
+      const pronunciation = document.createElement("span");
+      pronunciation.textContent = values[index] || "发音";
+      button.append(badge, pronunciation, svgIcon("M5 10v4h3l4 3V7l-4 3H5M16 9.5a4 4 0 0 1 0 5"));
+      container.appendChild(button);
+    });
+    return container;
+  }
+
+  function savedWordCard(record, index) {
+    const entry = record.entry || {};
+    const expanded = state.wordbookExpanded.has(record.id);
+    const card = document.createElement("article");
+    card.className = "wordbook-item";
+    card.classList.toggle("is-expanded", expanded);
+    card.dataset.wordId = record.id;
+
+    const row = document.createElement("div");
+    row.className = "wordbook-row";
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "wordbook-expand";
+    toggle.setAttribute("aria-expanded", String(expanded));
+    toggle.setAttribute("aria-controls", `wordbook-detail-${index}`);
+
+    const copy = document.createElement("span");
+    copy.className = "wordbook-row-copy";
+    const term = document.createElement("strong");
+    term.textContent = record.term;
+    const summary = document.createElement("span");
+    const firstSense = Array.isArray(entry.senses) ? entry.senses.find((sense) => sense && sense.meaning) : null;
+    summary.textContent = entry.meaning || (firstSense ? firstSense.meaning : "点击展开释义");
+    copy.append(term, summary);
+
+    const chevron = document.createElement("i");
+    chevron.appendChild(svgIcon("m8 10 4 4 4-4"));
+    toggle.append(copy, chevron);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "wordbook-remove";
+    remove.setAttribute("aria-label", `删除 ${record.term}`);
+    remove.appendChild(svgIcon("M5 7h14M9 7V4h6v3M8 10v8M12 10v8M16 10v8M7 7l1 14h8l1-14"));
+    row.append(toggle, remove);
+
+    const detail = document.createElement("div");
+    detail.className = "wordbook-detail";
+    detail.id = `wordbook-detail-${index}`;
+    detail.hidden = !expanded;
+
+    detail.appendChild(savedWordPronunciations(record, entry));
+    detail.append(...savedWordSenseElements(entry));
+
+    if (entry.contextMeaning) {
+      const contextMeaning = document.createElement("p");
+      contextMeaning.className = "wordbook-context-meaning";
+      contextMeaning.textContent = entry.contextMeaning;
+      detail.appendChild(contextMeaning);
+    }
+
+    const context = document.createElement("section");
+    context.className = "wordbook-source";
+    const sentence = document.createElement("blockquote");
+    sentence.textContent = record.sentence;
+    context.appendChild(sentence);
+    if (record.sentenceTranslation) {
+      const sentenceTranslation = document.createElement("p");
+      sentenceTranslation.textContent = record.sentenceTranslation;
+      context.appendChild(sentenceTranslation);
+    }
+    const savedMeta = document.createElement("small");
+    const savedAt = new Date(record.savedAt);
+    const savedDate = Number.isFinite(savedAt.getTime())
+      ? `${savedAt.getFullYear()}/${String(savedAt.getMonth() + 1).padStart(2, "0")}/${String(savedAt.getDate()).padStart(2, "0")}`
+      : "已收藏";
+    savedMeta.textContent = savedDate;
+    context.appendChild(savedMeta);
+    detail.appendChild(context);
+
+    card.append(row, detail);
+    return card;
+  }
+
+  function renderSavedWords() {
+    const languageWords = state.savedWords.filter((record) => savedWordLanguage(record) === state.learningLanguage);
+    const count = languageWords.length;
+    const query = elements.wordbookSearchInput.value.normalize("NFKC").toLocaleLowerCase().trim();
+    const visibleWords = query
+      ? languageWords.filter((record) => [record.term, record.selection, record.entry?.headword]
+          .filter(Boolean)
+          .some((value) => String(value).normalize("NFKC").toLocaleLowerCase().includes(query)))
+      : languageWords;
+    elements.wordbookCount.textContent = String(count);
+    elements.wordbookList.replaceChildren(...visibleWords.map(savedWordCard));
+    elements.wordbookEmptyText.textContent = count > 0 && query ? "没有找到这个单词" : "还没有收藏单词";
+    elements.wordbookEmpty.classList.toggle("is-hidden", visibleWords.length > 0);
+  }
+
+  function toggleWordbookSearch(forceOpen) {
+    const opening = forceOpen === undefined
+      ? elements.wordbookSearchRow.classList.contains("is-hidden")
+      : Boolean(forceOpen);
+    elements.wordbookSearchRow.classList.toggle("is-hidden", !opening);
+    elements.wordbookSearchButton.classList.toggle("is-active", opening);
+    elements.wordbookSearchButton.setAttribute("aria-expanded", String(opening));
+    if (opening) {
+      requestAnimationFrame(() => elements.wordbookSearchInput.focus());
+    } else {
+      elements.wordbookSearchInput.value = "";
+      renderSavedWords();
+    }
+  }
+
+  function openDictionary(selection, index) {
     hideWordPreview();
     if (!elements.analysisCard.classList.contains("is-hidden")) {
       closeSentenceAnalysis({ preserveStudySession: true });
     }
     beginStudyOverlay("dictionary");
+    state.dictionaryLookup = {
+      selection,
+      index,
+      language: state.learningLanguage,
+      entry: null,
+    };
     elements.dictionaryCard.classList.remove("is-hidden");
     elements.dictionaryCard.setAttribute("aria-busy", "true");
     elements.dictionaryCard.scrollTop = 0;
@@ -2372,6 +2724,7 @@
     elements.dictionaryStatus.classList.remove("is-error");
     elements.dictionaryContent.classList.add("is-hidden");
     elements.dictionaryCard.classList.remove("is-enriching");
+    updateDictionaryFavoriteButton();
   }
 
   function closeDictionary(options) {
@@ -2381,7 +2734,9 @@
     elements.dictionaryCard.removeAttribute("aria-busy");
     if (state.dictionaryController) state.dictionaryController.abort();
     state.dictionaryController = null;
+    state.dictionaryLookup = null;
     elements.dictionaryCard.classList.remove("is-enriching");
+    updateDictionaryFavoriteButton();
     const selection = window.getSelection();
     if (selection && !selection.isCollapsed) selection.removeAllRanges();
     endStudyOverlay("dictionary", options);
@@ -2395,6 +2750,8 @@
     elements.dictionaryStatus.classList.remove("sr-only");
     elements.dictionaryStatus.classList.add("is-error");
     elements.dictionaryContent.classList.add("is-hidden");
+    if (state.dictionaryLookup) state.dictionaryLookup.entry = null;
+    updateDictionaryFavoriteButton();
   }
 
   function dictionarySenseElement(sense) {
@@ -2494,6 +2851,8 @@
     elements.dictionaryContent.classList.remove("is-hidden");
     elements.dictionaryCard.classList.toggle("is-enriching", Boolean(config.enriching));
     elements.dictionaryCard.setAttribute("aria-busy", config.enriching ? "true" : "false");
+    if (state.dictionaryLookup) state.dictionaryLookup.entry = entry;
+    updateDictionaryFavoriteButton();
   }
 
   async function fetchLocalDefinition(selection, index, signal) {
@@ -2649,7 +3008,7 @@
     const requestId = ++state.dictionaryRequestId;
     if (state.dictionaryController) state.dictionaryController.abort();
     state.dictionaryController = null;
-    openDictionary(selection);
+    openDictionary(selection, index);
     speakDictionaryTerm(state.pronunciationAccent, selection);
     if (!state.transcriptId) {
       showDictionaryError("当前字幕已失效，请重新导入视频。");
@@ -3323,12 +3682,22 @@
   elements.translationToggle.addEventListener("click", toggleTranslations);
   elements.transcriptTab.addEventListener("click", () => setPanelView("transcript"));
   elements.summaryTab.addEventListener("click", () => setPanelView("summary"));
+  elements.wordbookTab.addEventListener("click", () => setPanelView("wordbook"));
+  elements.wordbookSearchButton.addEventListener("click", () => toggleWordbookSearch());
+  elements.wordbookSearchInput.addEventListener("input", renderSavedWords);
+  elements.wordbookSearchInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    toggleWordbookSearch(false);
+    elements.wordbookSearchButton.focus();
+  });
   elements.summaryRetryButton.addEventListener("click", () => {
     state.summaryTranscriptId = null;
     if (state.languageAvailable) loadAiSummary();
     else openAiSettings("ai");
   });
   elements.dictionaryClose.addEventListener("click", closeDictionary);
+  elements.dictionaryFavorite.addEventListener("click", toggleDictionaryFavorite);
   elements.dictionaryPronunciations.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-accent]");
     if (button) speakDictionaryTerm(button.dataset.accent);
@@ -3341,6 +3710,28 @@
     if (!point) return;
     const segment = state.transcript[Number(point.dataset.index)];
     if (segment) seekTo(segment.start, { play: state.playing });
+  });
+  elements.wordbookList.addEventListener("click", (event) => {
+    const card = event.target.closest(".wordbook-item");
+    if (!card) return;
+    const pronunciation = event.target.closest(".wordbook-pronunciations button[data-accent]");
+    if (pronunciation) {
+      speakDictionaryTerm(pronunciation.dataset.accent, pronunciation.dataset.term);
+      return;
+    }
+    if (event.target.closest(".wordbook-remove")) {
+      removeSavedWord(card.dataset.wordId);
+      return;
+    }
+    const toggle = event.target.closest(".wordbook-expand");
+    if (!toggle) return;
+    const detail = card.querySelector(".wordbook-detail");
+    const expanded = toggle.getAttribute("aria-expanded") !== "true";
+    toggle.setAttribute("aria-expanded", String(expanded));
+    card.classList.toggle("is-expanded", expanded);
+    detail.hidden = !expanded;
+    if (expanded) state.wordbookExpanded.add(card.dataset.wordId);
+    else state.wordbookExpanded.delete(card.dataset.wordId);
   });
 
   elements.transcriptList.addEventListener("pointerdown", (event) => {
@@ -3502,6 +3893,7 @@
   applySubtitleStyle();
   setPlaybackSpeed(SPEEDS.indexOf(state.speed));
   setVolume(state.volume);
+  renderSavedWords();
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && (

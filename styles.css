@@ -2821,7 +2821,8 @@ body.workspace-active .app-main {
   transition: opacity 160ms ease;
 }
 
-.transcript-panel.is-summary .transcript-actions {
+.transcript-panel.is-summary .transcript-actions,
+.transcript-panel.is-wordbook .transcript-actions {
   opacity: 0;
   pointer-events: none;
 }
@@ -3339,7 +3340,8 @@ body.workspace-active .app-main {
   background: rgba(255, 255, 255, 0.018);
 }
 
-.transcript-panel.is-summary .transcript-actions { display: none; }
+.transcript-panel.is-summary .transcript-actions,
+.transcript-panel.is-wordbook .transcript-actions { display: none; }
 
 .transcript-tool-label {
   margin-right: auto;
@@ -6543,7 +6545,8 @@ body.workspace-active .video-mount {
   box-shadow: 0 22px 54px rgba(0, 0, 0, 0.32);
 }
 
-.panel-tab:not(.is-active) #transcriptCount {
+.panel-tab:not(.is-active) #transcriptCount,
+.panel-tab:not(.is-active) #wordbookCount {
   display: none;
 }
 
@@ -6575,6 +6578,448 @@ body.workspace-active .video-mount {
 .line-word,
 .caption-overlay .caption-word[data-selection] {
   transition: color 80ms ease, text-shadow 100ms ease;
+}
+
+/* Persistent wordbook */
+
+.dictionary-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.dictionary-favorite {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.48);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.dictionary-favorite:hover:not(:disabled) {
+  border-color: rgba(232, 189, 104, 0.5);
+  background: rgba(232, 189, 104, 0.08);
+  color: #e8bd68;
+  transform: translateY(-1px);
+}
+
+.dictionary-favorite:disabled {
+  cursor: wait;
+  opacity: 0.3;
+}
+
+.dictionary-favorite svg {
+  width: 18px;
+  fill: transparent;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.65;
+  transition: fill 160ms ease, transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.dictionary-favorite.is-saved {
+  border-color: rgba(232, 189, 104, 0.42);
+  background: rgba(232, 189, 104, 0.1);
+  color: #e8bd68;
+}
+
+.dictionary-favorite.is-saved svg {
+  fill: currentColor;
+  transform: scale(1.06);
+}
+
+.wordbook-view {
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 0 16px 28px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-width: thin;
+}
+
+.wordbook-heading {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 8px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+  background: linear-gradient(180deg, #0d0f0e 82%, rgba(13, 15, 14, 0));
+}
+
+.wordbook-heading h2 {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.94);
+  font-family: "Aptos Display", "Segoe UI Variable Display", "PingFang SC", sans-serif;
+  font-size: 30px;
+  font-weight: 620;
+  letter-spacing: -0.04em;
+}
+
+.wordbook-search-trigger {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.48);
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.wordbook-search-trigger:hover,
+.wordbook-search-trigger.is-active {
+  border-color: rgba(232, 189, 104, 0.36);
+  background: rgba(232, 189, 104, 0.07);
+  color: #d8b66f;
+}
+
+.wordbook-search-trigger svg,
+.wordbook-search-row > svg {
+  width: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.7;
+}
+
+.wordbook-search-row {
+  display: flex;
+  margin: 12px 6px 0;
+  min-height: 48px;
+  padding: 0 14px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.4);
+  gap: 10px;
+  animation: wordbook-search-in 160ms ease both;
+}
+
+.wordbook-search-row:focus-within {
+  border-color: rgba(232, 189, 104, 0.38);
+  color: #d8b66f;
+}
+
+.wordbook-search-row input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 16px;
+}
+
+.wordbook-search-row input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.wordbook-list {
+  display: grid;
+}
+
+.wordbook-item {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.wordbook-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 5px;
+}
+
+.wordbook-expand {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  width: 100%;
+  min-height: 72px;
+  padding: 12px 8px;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  gap: 14px;
+}
+
+.wordbook-row-copy {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(80px, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 14px;
+}
+
+.wordbook-row-copy strong {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.93);
+  font-family: "Aptos Display", "Segoe UI Variable Display", sans-serif;
+  font-size: 18px;
+  font-weight: 610;
+  letter-spacing: -0.015em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wordbook-row-copy > span {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.44);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wordbook-expand > i {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.44);
+  transition: border-color 160ms ease, color 160ms ease, transform 180ms ease;
+}
+
+.wordbook-expand > i svg,
+.wordbook-remove svg {
+  width: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.65;
+}
+
+.wordbook-expand:hover > i {
+  border-color: rgba(232, 189, 104, 0.34);
+  color: #d8b66f;
+}
+
+.wordbook-item.is-expanded .wordbook-expand > i {
+  color: #e8bd68;
+  transform: rotate(180deg);
+}
+
+.wordbook-remove {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.24);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.wordbook-remove:hover {
+  background: rgba(203, 106, 75, 0.1);
+  color: #dc8f73;
+}
+
+.wordbook-detail {
+  margin: -1px 6px 18px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(232, 189, 104, 0.045), rgba(255, 255, 255, 0.018));
+  animation: wordbook-detail-in 180ms ease both;
+}
+
+.wordbook-pronunciations {
+  display: flex;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wordbook-pronunciations button {
+  display: flex;
+  min-height: 40px;
+  padding: 0 12px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  gap: 8px;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.wordbook-pronunciations button:hover {
+  border-color: rgba(232, 189, 104, 0.38);
+  background: rgba(232, 189, 104, 0.07);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.wordbook-pronunciations b {
+  color: #d8b66f;
+  font-size: 12px;
+}
+
+.wordbook-pronunciations span {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 13px;
+}
+
+.wordbook-pronunciations svg {
+  width: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.wordbook-sense {
+  padding: 12px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.wordbook-pronunciations + .wordbook-sense {
+  border-top: 0;
+}
+
+.wordbook-sense > span {
+  color: #cda85f;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+}
+
+.wordbook-sense p {
+  margin: 4px 0 2px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.wordbook-english-definitions {
+  display: grid;
+  margin-top: 5px;
+  gap: 5px;
+}
+
+.wordbook-english-definitions small {
+  display: block;
+  color: rgba(255, 255, 255, 0.42);
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.wordbook-english-definitions:empty {
+  display: none;
+}
+
+.wordbook-context-meaning {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border-left: 2px solid #d8ae59;
+  background: rgba(232, 189, 104, 0.055);
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.wordbook-source {
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.wordbook-source blockquote {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.88);
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 17px;
+  line-height: 1.58;
+}
+
+.wordbook-source p {
+  margin: 5px 0 0;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.wordbook-source small {
+  display: block;
+  margin-top: 9px;
+  color: rgba(255, 255, 255, 0.26);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.wordbook-empty {
+  display: grid;
+  min-height: 300px;
+  padding: 30px;
+  place-items: center;
+  align-content: center;
+  color: rgba(255, 255, 255, 0.35);
+  text-align: center;
+  gap: 12px;
+}
+
+.wordbook-empty svg {
+  width: 32px;
+  margin-bottom: 5px;
+  fill: transparent;
+  stroke: #b99756;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.35;
+}
+
+.wordbook-empty strong {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 16px;
+  font-weight: 580;
+}
+
+@keyframes wordbook-detail-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes wordbook-search-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 480px) {
+  .wordbook-row-copy {
+    display: block;
+  }
+
+  .wordbook-row-copy > span {
+    display: block;
+    margin-top: 3px;
+  }
+
 }
 
 @media (max-width: 1260px) and (min-width: 921px) {
