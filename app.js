@@ -1240,9 +1240,6 @@
       state.activeIndex = -1;
       state.lastCaptionWord = -1;
       elements.captionOverlay.classList.remove("is-visible");
-      elements.captionOverlay.classList.remove("has-translation");
-      elements.captionTranslation.textContent = "译文将在开启翻译后显示";
-      elements.captionTranslation.classList.remove("is-loading", "has-error");
       return;
     }
 

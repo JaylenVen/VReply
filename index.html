@@ -85,8 +85,7 @@
 
         <div class="intake-column reveal reveal-3">
           <div class="intake-card">
-            <div class="learning-language-picker" id="learningLanguagePicker" role="radiogroup" aria-labelledby="learningLanguageLabel">
-              <span class="learning-language-label" id="learningLanguageLabel">用汉语学习</span>
+            <div class="learning-language-picker" id="learningLanguagePicker" role="radiogroup" aria-label="学习语言">
               <div class="learning-language-options">
                 <label>
                   <input name="learningLanguage" type="radio" value="en" />
@@ -125,22 +124,6 @@
 
           </div>
 
-          <div class="workflow-strip" aria-label="使用步骤">
-            <div class="workflow-item">
-              <span class="workflow-number" aria-hidden="true">01</span>
-              <p><strong>粘贴链接</strong><span>视频直接在这里播放。</span></p>
-            </div>
-            <div class="workflow-divider" aria-hidden="true"></div>
-            <div class="workflow-item">
-              <span class="workflow-number" aria-hidden="true">02</span>
-              <p><strong>听清每一句</strong><span>字幕会自动跟随播放。</span></p>
-            </div>
-            <div class="workflow-divider" aria-hidden="true"></div>
-            <div class="workflow-item">
-              <span class="workflow-number" aria-hidden="true">03</span>
-              <p><strong>开口跟读</strong><span>点选句子，反复练到顺口。</span></p>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -158,14 +141,13 @@
 
               <div class="extract-overlay" id="extractOverlay" aria-live="polite">
                 <div class="extract-visual" aria-hidden="true">
-                  <div class="sound-bars">
-                    <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-                  </div>
+                  <span class="extract-orb"></span>
                 </div>
-                <span class="extract-kicker">正在准备练习</span>
-                <h2 id="extractTitle">正在读取视频…</h2>
-                <p id="extractDetail">正在识别字幕并校准时间。</p>
-                <div class="extract-progress"><i id="extractProgress"></i></div>
+                <div class="sr-only">
+                  <span id="extractTitle">正在读取视频…</span>
+                  <span id="extractDetail">正在识别字幕并校准时间。</span>
+                  <span id="extractProgress"></span>
+                </div>
               </div>
             </div>
 
