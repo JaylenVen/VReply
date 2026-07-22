@@ -1,84 +1,63 @@
 # VReply
 
-> 把 YouTube 视频变成逐句英语或西班牙语口语练习。
+把带字幕的 YouTube 视频转换为逐句英语或西班牙语跟读练习。
 
-VReply 是一款本地运行的语言听说练习工具。在首页选择英语或西班牙语，再粘贴带对应语言字幕的 YouTube 链接，即可边看视频，边按句精听、跟读、查词和复习；基础练习无需账号，也无需安装第三方依赖。
+VReply 是一款本地运行的语言学习工具。导入视频后，可按字幕逐句精听、循环播放、查词和复习；基础功能无需账号、前端构建工具或第三方 Python 包。
 
-## 主要功能
+## 功能
 
-- **双学习模式**：支持“汉语学英语”和“汉语学西班牙语”，自动选择对应的 YouTube 字幕轨。
-- **逐句精听**：自动整理目标语言字幕并同步视频进度，支持点句跳转、上一句/下一句和单句循环。
-- **灵活播放**：0.5×–3.0× 八档倍速、连续音量调节、播放进度拖动和字幕自动跟随。
-- **双语字幕**：可使用 Chrome 本地翻译，或接入兼容 Chat Completions 的模型 API；字号、字体、颜色、透明度和字重均可调整。
-- **语境查词**：英语模式内置精简版 ECDICT，常规查词无需 API；西班牙语模式可通过模型 API 获取中文释义、词形、例句及西班牙/墨西哥发音参考。
-- **AI 辅助**：配置模型后可使用语境查词、句子分析、字幕翻译和视频内容简介。
-- **复习整理**：支持字幕搜索与纯文本下载。
+- 英语与西班牙语学习模式
+- 字幕同步、点句跳转、上下句切换与单句循环
+- 0.5×–3.0× 倍速、音量调节与字幕自动跟随
+- 字幕搜索、文本导出、单词收藏与学习时长记录
+- 英语本地词典与英/美发音；西班牙/墨西哥发音
+- Chrome 本地翻译或自定义模型 API 双语字幕
+- 可选 AI 能力：语境查词、句子分析、字幕翻译、内容简介
 
 ## 快速开始
 
-运行环境：Python 3.10+，以及能够访问 YouTube 的现代桌面浏览器。
+要求：Python 3.10+、可访问 YouTube 的现代桌面浏览器。
 
 ```bash
+git clone https://github.com/JaylenVen/VReply.git
+cd VReply
 python server.py
 ```
 
-启动后，打开终端中显示的访问地址，粘贴 YouTube 链接并点击 **导入**。
+服务启动后，按终端提示在浏览器中访问 VReply，选择学习语言并导入带对应语言字幕的 YouTube 视频。
 
-> [!NOTE]
-> VReply 使用视频已有的英语或西班牙语字幕，不会为缺少所选语言字幕的视频进行语音识别。
+> VReply 读取视频已有的字幕，不执行语音识别。无对应语言字幕、受地区限制或需要登录的视频可能无法使用。
 
 ## 翻译与 AI
 
-在页面右上角进入 **设置**：
+基础练习无需模型 API。需要双语字幕时，可在 **设置** 中选择：
 
-- **Chrome 本地翻译**：桌面版 Chrome 138+，无需 API Key；会根据当前模式使用英译中或西译中语言包，首次使用可能需要下载。
-- **自定义模型 API**：填写兼容 `POST /chat/completions` 的 API 地址、模型名称和 API Key。
+- **Chrome 本地翻译**：使用浏览器内置 Translator API，无需 API Key；可用性由页面自动检测。
+- **自定义模型 API**：支持兼容 OpenAI Chat Completions 的接口。
 
-也可以在启动前设置环境变量：
+模型也可通过环境变量配置：
 
-| 变量 | 用途 |
+| 变量 | 说明 |
 | --- | --- |
-| `VREPLY_LLM_BASE_URL` | 模型 API 基础地址 |
-| `VREPLY_LLM_API_KEY` | 模型 API Key |
+| `VREPLY_LLM_BASE_URL` | API 基础地址 |
+| `VREPLY_LLM_API_KEY` | API Key |
 | `VREPLY_LLM_MODEL` | 模型名称 |
-| `VREPLY_HOST` / `VREPLY_PORT` | 本地服务监听地址与端口 |
+| `VREPLY_HOST` | 服务监听地址 |
+| `VREPLY_PORT` | 服务监听端口 |
 
-API Key 仅保存在当前本地服务进程中，不会通过配置接口返回到浏览器；关闭服务后，页面内填写的配置会失效。
+页面中填写的 API Key 仅保存在当前服务进程内，不会由配置接口返回浏览器；服务停止后配置失效。请勿提交 API Key，也不要在缺少身份验证和访问控制时将服务直接暴露到公网。
 
-## 项目结构
-
-```text
-.
-├─ index.html / styles.css / app.js   # 前端页面、样式与交互
-├─ server.py                          # 静态服务、字幕与语言功能 API
-├─ test_server.py                     # 后端单元测试
-├─ assets/                            # 首页视觉素材
-├─ data/                              # 本地 ECDICT 精简词库与说明
-├─ scripts/                           # 词库构建脚本
-└─ third_party/                       # 第三方许可文件
-```
-
-项目不依赖前端构建工具或第三方 Python 包。
-
-## 开发与测试
+## 开发
 
 ```bash
 python -m unittest -v
 node --check app.js
 ```
 
-如需从 ECDICT CSV 重建本地词库：
+项目内置 [ECDICT](https://github.com/skywind3000/ECDICT) 精简词库。如需从 ECDICT CSV 重建：
 
 ```bash
 python scripts/build_local_dictionary.py path/to/ecdict.csv
 ```
 
-## 使用边界与安全
-
-- 仅支持 YouTube、`youtu.be`、Shorts 和 Embed 形式的有效视频链接。
-- 字幕与缩略图获取依赖 YouTube 当前可用性和视频权限。
-- VReply 面向个人本地使用；请勿提交 API Key，也不要在缺少身份验证和访问控制时直接部署到公网。
-
-## 反馈
-
-欢迎通过 GitHub Issues 提交问题或建议。请附上操作系统、浏览器、Python 版本和复现步骤，并移除所有敏感信息。
+ECDICT 数据采用 MIT License，许可文本见 [`third_party/ECDICT-LICENSE.txt`](third_party/ECDICT-LICENSE.txt)。
