@@ -1203,9 +1203,23 @@
 
   function setPlaying(playing) {
     state.playing = Boolean(playing);
+    if (state.playing) startPlaybackTicker();
+    else stopPlaybackTicker();
     elements.playButton.classList.toggle("is-playing", state.playing);
     elements.playButton.setAttribute("aria-label", state.playing ? "暂停视频" : "播放视频");
     elements.playButton.dataset.controlTooltip = state.playing ? "暂停" : "播放";
+  }
+
+  function startPlaybackTicker() {
+    if (state.ticker !== null) return;
+    state.lastTickAt = performance.now();
+    state.ticker = window.requestAnimationFrame(tickPlayback);
+  }
+
+  function stopPlaybackTicker() {
+    if (state.ticker === null) return;
+    window.cancelAnimationFrame(state.ticker);
+    state.ticker = null;
   }
 
   function pausePlayback() {
@@ -1283,8 +1297,8 @@
     updatePlaybackUI(nextTime, true);
   }
 
-  function tickPlayback() {
-    const now = performance.now();
+  function tickPlayback(now) {
+    state.ticker = window.requestAnimationFrame(tickPlayback);
     const elapsed = Math.max(0, (now - state.lastTickAt) / 1000);
     state.lastTickAt = now;
 
@@ -4099,7 +4113,6 @@
     }
   });
 
-  state.ticker = window.setInterval(tickPlayback, 100);
   detectChromeTranslationAvailability();
   loadLanguageCapabilities();
   updatePlaybackUI(0, true);

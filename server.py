@@ -661,17 +661,19 @@ def _word_ends_sentence(text: str) -> bool:
 def _sentence_segments(cues: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Group word-timed caption cues into readable, sentence-sized segments."""
 
-    words = [
-        {
-            "text": str(word.get("text") or ""),
-            "start": _finite_number(word.get("start")),
-            "end": _finite_number(word.get("end")),
-        }
+    cue_words = [
+        [
+            {
+                "text": str(word.get("text") or ""),
+                "start": _finite_number(word.get("start")),
+                "end": _finite_number(word.get("end")),
+            }
+            for word in cue.get("words", [])
+            if isinstance(word, dict) and str(word.get("text") or "").strip()
+        ]
         for cue in cues
-        for word in cue.get("words", [])
-        if isinstance(word, dict) and str(word.get("text") or "").strip()
     ]
-    if not words:
+    if not any(cue_words):
         return cues
 
     grouped: list[dict[str, Any]] = []
@@ -700,13 +702,22 @@ def _sentence_segments(cues: list[dict[str, Any]]) -> list[dict[str, Any]]:
         )
         current.clear()
 
-    for index, word in enumerate(words):
-        current.append(word)
-        next_word = words[index + 1] if index + 1 < len(words) else None
+    for cue_index, words in enumerate(cue_words):
+        for word in words:
+            current.append(word)
+            if _word_ends_sentence(str(word["text"])):
+                flush()
+
+        if not current:
+            continue
+        next_word = next(
+            (later_words[0] for later_words in cue_words[cue_index + 1 :] if later_words),
+            None,
+        )
         text_length = sum(len(str(item["text"])) + 1 for item in current) - 1
         duration = float(current[-1]["end"]) - float(current[0]["start"])
         pause = (
-            max(0.0, float(next_word["start"]) - float(word["end"]))
+            max(0.0, float(next_word["start"]) - float(current[-1]["end"]))
             if next_word is not None
             else 0.0
         )
@@ -716,11 +727,36 @@ def _sentence_segments(cues: list[dict[str, Any]]) -> list[dict[str, Any]]:
             or duration >= MAX_SENTENCE_SECONDS
             or pause >= SENTENCE_PAUSE_SECONDS
         )
-        if _word_ends_sentence(str(word["text"])) or fallback_boundary:
+        # Keep a source caption cue intact. Splitting a long untimed cue in the
+        # middle makes the second half appear later than it was spoken.
+        if fallback_boundary:
             flush()
 
     flush()
     return grouped
+
+
+def _inferred_word_seconds(cues: list[dict[str, Any]]) -> float | None:
+    """Estimate a conservative per-word cap for tracks without word offsets."""
+
+    samples = sorted(
+        (float(cue["end"]) - float(cue["start"])) / int(cue["word_count"])
+        for cue in cues
+        if not cue["has_word_offsets"]
+        and int(cue["word_count"]) >= 2
+        and float(cue["end"]) > float(cue["start"])
+    )
+    if len(samples) < 4:
+        return None
+    middle = len(samples) // 2
+    median = (
+        samples[middle]
+        if len(samples) % 2
+        else (samples[middle - 1] + samples[middle]) / 2.0
+    )
+    # A cue can remain on screen through a pause. Do not stretch every word
+    # across that dwell time; allow normal local variation around the median.
+    return max(0.3, min(0.65, median * 1.5))
 
 
 def normalize_json3_segments(payload: Any) -> list[dict[str, Any]]:
@@ -743,12 +779,22 @@ def normalize_json3_segments(payload: Any) -> list[dict[str, Any]]:
             continue
         start_ms = max(0.0, _finite_number(event.get("tStartMs")))
         duration_ms = max(0.0, _finite_number(event.get("dDurationMs")))
+        word_count = sum(
+            len(re.findall(r"\S+", _clean_caption_text(segment.get("utf8", ""))))
+            for segment in event["segs"]
+            if isinstance(segment, dict) and isinstance(segment.get("utf8"), str)
+        )
         cues.append(
             {
                 "start": start_ms / 1000.0,
                 "duration": duration_ms / 1000.0,
                 "text": text,
                 "segs": event["segs"],
+                "word_count": word_count,
+                "has_word_offsets": any(
+                    isinstance(segment, dict) and "tOffsetMs" in segment
+                    for segment in event["segs"]
+                ),
             }
         )
 
@@ -765,7 +811,6 @@ def normalize_json3_segments(payload: Any) -> list[dict[str, Any]]:
             next_later_start[index] = following
         group_start = group_end
 
-    result: list[dict[str, Any]] = []
     for index, cue in enumerate(cues):
         start = float(cue["start"])
         duration = float(cue["duration"])
@@ -781,12 +826,22 @@ def normalize_json3_segments(payload: Any) -> list[dict[str, Any]]:
             end = min(end, following_start)
         if end <= start:
             end = start + 0.1
-        words = _caption_words(cue["segs"], start=start, end=end)
+        cue["end"] = end
+
+    inferred_word_seconds = _inferred_word_seconds(cues)
+    result: list[dict[str, Any]] = []
+    for cue in cues:
+        start = float(cue["start"])
+        end = float(cue["end"])
+        word_end = end
+        if inferred_word_seconds is not None and not cue["has_word_offsets"] and cue["word_count"]:
+            word_end = min(end, start + int(cue["word_count"]) * inferred_word_seconds)
+        words = _caption_words(cue["segs"], start=start, end=word_end)
         result.append(
             {
                 "id": len(result) + 1,
                 "start": round(start, 3),
-                "end": round(end, 3),
+                "end": round(word_end, 3),
                 "text": str(cue["text"]),
                 "words": words,
             }

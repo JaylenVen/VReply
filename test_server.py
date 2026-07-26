@@ -108,6 +108,52 @@ class NormalizeJson3SegmentsTests(unittest.TestCase):
 
         self.assertEqual([segment["text"] for segment in result], ["First spoken thought", "A new thought"])
 
+    def test_fallback_boundary_does_not_split_a_source_caption_cue(self) -> None:
+        first_line = " ".join("w" for _index in range(49))
+        payload = {
+            "events": [
+                {"tStartMs": 0, "dDurationMs": 1000, "segs": [{"utf8": first_line}]},
+                {
+                    "tStartMs": 1000,
+                    "dDurationMs": 1000,
+                    "segs": [{"utf8": "so this time nothing goes wrong"}],
+                },
+                {"tStartMs": 2000, "dDurationMs": 1000, "segs": [{"utf8": "Next line."}]},
+            ]
+        }
+
+        result = server.normalize_json3_segments(payload)
+
+        self.assertEqual(len(result), 2)
+        self.assertTrue(result[0]["text"].endswith("so this time nothing goes wrong"))
+        self.assertEqual(result[1]["text"], "Next line.")
+        self.assertEqual(result[1]["start"], 2.0)
+
+    def test_untimed_words_do_not_stretch_across_a_long_caption_dwell(self) -> None:
+        payload = {
+            "events": [
+                {
+                    "tStartMs": index * 1000,
+                    "dDurationMs": 1000,
+                    "segs": [{"utf8": f"quick cue number {index}"}],
+                }
+                for index in range(4)
+            ]
+        }
+        payload["events"].append(
+            {
+                "tStartMs": 4000,
+                "dDurationMs": 10000,
+                "segs": [{"utf8": "so this time nothing goes wrong."}],
+            }
+        )
+
+        result = server.normalize_json3_segments(payload)
+        last_word = result[-1]["words"][-1]
+
+        self.assertLess(last_word["end"], 7.0)
+        self.assertEqual(last_word["text"], "wrong.")
+
 
 class CaptionTrackSelectionTests(unittest.TestCase):
     def test_spanish_manual_track_wins_over_automatic_track(self) -> None:

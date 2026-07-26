@@ -108,6 +108,21 @@ svg {
   mix-blend-mode: soft-light;
 }
 
+.site-version {
+  position: fixed;
+  z-index: 101;
+  right: 10px;
+  bottom: 6px;
+  color: rgba(246, 243, 236, 0.38);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  user-select: none;
+}
+
 .site-header {
   position: relative;
   z-index: 20;
