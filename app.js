@@ -573,7 +573,7 @@
     elements.heroEyebrow.textContent = language.heroEyebrow;
     elements.heroDescriptionPrimary.textContent = language.heroPrimary;
     elements.heroDescriptionSecondary.textContent = language.heroSecondary;
-    elements.videoUrl.placeholder = `带${language.nameZh}字幕的 YouTube 视频链接`;
+    elements.videoUrl.placeholder = "粘贴 YouTube 链接";
     elements.subtitlePreviewOriginal.textContent = language.subtitlePreview;
     if (!state.source) elements.projectTitle.textContent = `日常${language.nameZh}练习`;
 
@@ -738,6 +738,12 @@
     clearFieldError();
     if (document.body.classList.contains("import-committing")) return;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const token = ++state.loadToken;
+    const sourceLanguage = LEARNING_LANGUAGES[source.language];
+    const transcriptPromise = resolveTranscript(source.url, source.language).then(
+      (result) => ({ result, error: null }),
+      (error) => ({ result: null, error }),
+    );
     setImportBusy(true);
     document.body.classList.add("import-committing");
     await delay(reducedMotion ? 30 : 110);
@@ -746,7 +752,6 @@
     await delay(reducedMotion ? 50 : 760);
     if (!document.body.classList.contains("door-opening")) return;
 
-    const token = ++state.loadToken;
     state.source = source;
     state.transcript = [];
     state.transcriptNodes = [];
@@ -815,14 +820,12 @@
     elements.workspaceView.setAttribute("aria-busy", "true");
     setInteractiveReady(false);
 
-    const sourceLanguage = LEARNING_LANGUAGES[source.language];
     elements.projectTitle.textContent = `${sourceLanguage.nameZh} · 已导入的视频`;
     elements.transcriptCount.textContent = "0";
 
     mountVideo(source, token);
     fetchVideoTitle(source, token);
 
-    const transcriptPromise = resolveTranscript(source.url, source.language);
     const phases = [
       {
         progress: 28,
@@ -855,17 +858,20 @@
       elements.extractTitle.textContent = phase.title;
       elements.extractDetail.textContent = phase.detail;
       elements.extractProgress.style.width = `${phase.progress}%`;
-      await delay(phase.wait);
+      const phaseResult = await Promise.race([
+        transcriptPromise.then(() => "transcript"),
+        delay(phase.wait).then(() => "timer"),
+      ]);
+      if (phaseResult === "transcript") break;
     }
 
-    let transcriptResult;
-    try {
-      transcriptResult = await transcriptPromise;
-    } catch (error) {
+    const transcriptOutcome = await transcriptPromise;
+    if (transcriptOutcome.error) {
       if (token !== state.loadToken) return;
-      showTranscriptionFailure(error);
+      showTranscriptionFailure(transcriptOutcome.error);
       return;
     }
+    const transcriptResult = transcriptOutcome.result;
     if (token !== state.loadToken) return;
 
     state.transcript = transcriptResult.segments;
@@ -3635,6 +3641,48 @@
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
 
+  function initializeLandingGlass() {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const finePointer = window.matchMedia("(pointer: fine)");
+    if (reducedMotion.matches || !finePointer.matches) return;
+
+    const root = document.documentElement;
+    const card = elements.landingView.querySelector(".intake-card");
+    let pointerX = window.innerWidth * 0.72;
+    let pointerY = window.innerHeight * 0.34;
+    let animationFrame = null;
+
+    const render = () => {
+      animationFrame = null;
+      if (document.body.classList.contains("workspace-active")) return;
+
+      const x = Math.max(0, Math.min(100, (pointerX / window.innerWidth) * 100));
+      const y = Math.max(0, Math.min(100, (pointerY / window.innerHeight) * 100));
+      const shiftX = (x - 50) * 0.08;
+      const shiftY = (y - 50) * 0.055;
+      const cardRect = card.getBoundingClientRect();
+      const cardX = Math.max(0, Math.min(100, ((pointerX - cardRect.left) / cardRect.width) * 100));
+      const cardY = Math.max(0, Math.min(100, ((pointerY - cardRect.top) / cardRect.height) * 100));
+
+      root.style.setProperty("--liquid-x", `${x.toFixed(2)}%`);
+      root.style.setProperty("--liquid-y", `${y.toFixed(2)}%`);
+      root.style.setProperty("--liquid-shift-x", `${shiftX.toFixed(2)}px`);
+      root.style.setProperty("--liquid-shift-y", `${shiftY.toFixed(2)}px`);
+      root.style.setProperty("--liquid-tilt-x", `${((50 - y) * 0.025).toFixed(2)}deg`);
+      root.style.setProperty("--liquid-tilt-y", `${((x - 50) * 0.035).toFixed(2)}deg`);
+      root.style.setProperty("--card-glow-x", `${cardX.toFixed(2)}%`);
+      root.style.setProperty("--card-glow-y", `${cardY.toFixed(2)}%`);
+    };
+
+    document.addEventListener("pointermove", (event) => {
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+      if (!animationFrame) animationFrame = window.requestAnimationFrame(render);
+    }, { passive: true });
+
+    render();
+  }
+
   function subtitleLookupTarget(node) {
     if (!(node instanceof Element)) return null;
     return node.closest(".line-word[data-selection], .caption-word[data-selection]");
@@ -4045,6 +4093,7 @@
   window.visualViewport?.addEventListener("resize", syncAppViewportHeight, { passive: true });
 
   initializeFontSelects();
+  initializeLandingGlass();
   syncLearningLanguageUi();
   applySubtitleStyle();
   setPlaybackSpeed(SPEEDS.indexOf(state.speed));

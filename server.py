@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import gzip
 import hashlib
 import html as html_module
 import json
@@ -237,6 +238,31 @@ class _SafeRedirectHandler(HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+def _read_upstream_body(response: Any, *, limit: int) -> bytes:
+    content_encoding = str(response.headers.get("Content-Encoding") or "").strip().lower()
+    try:
+        if content_encoding in {"", "identity"}:
+            body = response.read(limit + 1)
+        elif content_encoding == "gzip":
+            with gzip.GzipFile(fileobj=response, mode="rb") as decoded:
+                body = decoded.read(limit + 1)
+        else:
+            raise APIError(
+                502,
+                "unsupported_upstream_encoding",
+                "YouTube returned an unsupported response encoding.",
+            )
+    except (gzip.BadGzipFile, EOFError) as exc:
+        raise APIError(
+            502,
+            "invalid_upstream_encoding",
+            "YouTube returned an unreadable compressed response.",
+        ) from exc
+    if len(body) > limit:
+        raise APIError(502, "upstream_too_large", "YouTube returned an unexpectedly large response.")
+    return body
+
+
 def _fetch_bytes(url: str, *, limit: int, accept: str) -> bytes:
     if not _is_safe_upstream_url(url):
         raise APIError(502, "unsafe_upstream", "An unexpected upstream address was blocked.")
@@ -247,13 +273,14 @@ def _fetch_bytes(url: str, *, limit: int, accept: str) -> bytes:
             "User-Agent": USER_AGENT,
             "Accept": accept,
             "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip",
             "Connection": "close",
         },
     )
     opener = build_opener(_SafeRedirectHandler())
     try:
         with opener.open(request, timeout=UPSTREAM_TIMEOUT_SECONDS) as response:
-            body = response.read(limit + 1)
+            body = _read_upstream_body(response, limit=limit)
     except HTTPError as exc:
         if exc.code == 429:
             raise APIError(503, "youtube_rate_limited", "YouTube temporarily rate-limited the caption request.") from exc
@@ -267,8 +294,6 @@ def _fetch_bytes(url: str, *, limit: int, accept: str) -> bytes:
     except OSError as exc:
         raise APIError(502, "youtube_unavailable", "YouTube could not be reached.") from exc
 
-    if len(body) > limit:
-        raise APIError(502, "upstream_too_large", "YouTube returned an unexpectedly large response.")
     return body
 
 
@@ -284,6 +309,7 @@ def _post_json_bytes(url: str, payload: dict[str, Any], *, limit: int) -> bytes:
             "User-Agent": USER_AGENT,
             "Accept": "application/json",
             "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip",
             "Content-Type": "application/json",
             "Origin": "https://www.youtube.com",
             "Referer": "https://www.youtube.com/",
@@ -293,7 +319,7 @@ def _post_json_bytes(url: str, payload: dict[str, Any], *, limit: int) -> bytes:
     opener = build_opener(_SafeRedirectHandler())
     try:
         with opener.open(request, timeout=UPSTREAM_TIMEOUT_SECONDS) as response:
-            response_body = response.read(limit + 1)
+            response_body = _read_upstream_body(response, limit=limit)
     except HTTPError as exc:
         if exc.code == 429:
             raise APIError(503, "youtube_rate_limited", "YouTube temporarily rate-limited the caption request.") from exc
@@ -306,8 +332,6 @@ def _post_json_bytes(url: str, payload: dict[str, Any], *, limit: int) -> bytes:
         raise APIError(502, "youtube_unavailable", "YouTube could not be reached.") from exc
     except OSError as exc:
         raise APIError(502, "youtube_unavailable", "YouTube could not be reached.") from exc
-    if len(response_body) > limit:
-        raise APIError(502, "upstream_too_large", "YouTube returned an unexpectedly large response.")
     return response_body
 
 
@@ -364,11 +388,7 @@ def extract_innertube_config(watch_html: str) -> tuple[str, dict[str, Any]]:
     raise APIError(502, "innertube_config_missing", "YouTube's caption configuration could not be read.")
 
 
-def fetch_innertube_player(video_id: str, watch_html: str) -> dict[str, Any]:
-    api_key, context = extract_innertube_config(watch_html)
-    endpoint = "https://www.youtube.com/youtubei/v1/player?" + urlencode(
-        {"key": api_key, "prettyPrint": "false"}
-    )
+def fetch_innertube_player(video_id: str, watch_html: str | None = None) -> dict[str, Any]:
     android_context = {
         "client": {
             "clientName": "ANDROID",
@@ -378,8 +398,18 @@ def fetch_innertube_player(video_id: str, watch_html: str) -> dict[str, Any]:
             "gl": "US",
         }
     }
+    if watch_html is None:
+        endpoint = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false"
+        candidate_contexts = (android_context,)
+    else:
+        api_key, context = extract_innertube_config(watch_html)
+        endpoint = "https://www.youtube.com/youtubei/v1/player?" + urlencode(
+            {"key": api_key, "prettyPrint": "false"}
+        )
+        candidate_contexts = (android_context, context)
+
     last_response: dict[str, Any] | None = None
-    for candidate_context in (context, android_context):
+    for candidate_context in candidate_contexts:
         response_bytes = _post_json_bytes(
             endpoint,
             {
@@ -1180,44 +1210,75 @@ def transcribe_youtube(url: Any, source_language: Any = "en") -> dict[str, Any]:
         cached["cached"] = True
         return cached
 
-    watch_url = canonical_watch_url(video_id)
-    watch_bytes = _fetch_bytes(watch_url, limit=MAX_WATCH_BYTES, accept="text/html,application/xhtml+xml")
-    try:
-        watch_html = watch_bytes.decode("utf-8-sig", errors="replace")
-    except UnicodeError as exc:
-        raise APIError(502, "invalid_player_data", "YouTube returned unreadable player metadata.") from exc
-    player_response = extract_player_response(watch_html)
-
-    playability = player_response.get("playabilityStatus")
-    if isinstance(playability, dict) and playability.get("status") == "ERROR":
-        raise APIError(404, "video_unavailable", "The YouTube video is unavailable.")
-
+    player_response: dict[str, Any] = {}
     caption_bytes = b""
     track: dict[str, Any] | None = None
+
+    # The Android player endpoint can provide metadata and current caption URLs
+    # without downloading the much larger watch page.
     try:
-        track = choose_caption_track(player_response, source_language)
-        caption_url = _caption_json3_url(track.get("baseUrl"))
-        caption_bytes = _fetch_bytes(
-            caption_url,
+        direct_player_response = fetch_innertube_player(video_id)
+        direct_track = choose_caption_track(direct_player_response, source_language)
+        direct_caption_bytes = _fetch_bytes(
+            _caption_json3_url(direct_track.get("baseUrl")),
             limit=MAX_CAPTION_BYTES,
             accept="application/json,text/plain;q=0.9",
         )
     except APIError:
-        caption_bytes = b""
+        pass
+    else:
+        if direct_caption_bytes:
+            player_response = direct_player_response
+            track = direct_track
+            caption_bytes = direct_caption_bytes
 
-    # Recent YouTube pages can expose a caption URL in their embedded player
-    # response that returns an empty body.  Refreshing player metadata through
-    # the page's own Innertube client context produces the current track URL.
+    # Keep the watch-page flow as a compatibility fallback if YouTube rejects
+    # the direct player request or returns an empty caption response.
     if not caption_bytes:
-        player_response = fetch_innertube_player(video_id, watch_html)
-        track = choose_caption_track(player_response, source_language)
+        watch_url = canonical_watch_url(video_id)
+        watch_bytes = _fetch_bytes(
+            watch_url,
+            limit=MAX_WATCH_BYTES,
+            accept="text/html,application/xhtml+xml",
+        )
+        try:
+            watch_html = watch_bytes.decode("utf-8-sig", errors="replace")
+        except UnicodeError as exc:
+            raise APIError(502, "invalid_player_data", "YouTube returned unreadable player metadata.") from exc
+        embedded_player_response = extract_player_response(watch_html)
+
+        playability = embedded_player_response.get("playabilityStatus")
+        if isinstance(playability, dict) and playability.get("status") == "ERROR":
+            raise APIError(404, "video_unavailable", "The YouTube video is unavailable.")
+
+        # Embedded caption URLs on recent YouTube pages commonly return an
+        # empty body. Refresh first, but keep that URL as a final fallback.
+        try:
+            refreshed_player_response = fetch_innertube_player(video_id, watch_html)
+            refreshed_track = choose_caption_track(refreshed_player_response, source_language)
+            refreshed_caption_bytes = _fetch_bytes(
+                _caption_json3_url(refreshed_track.get("baseUrl")),
+                limit=MAX_CAPTION_BYTES,
+                accept="application/json,text/plain;q=0.9",
+            )
+        except APIError:
+            pass
+        else:
+            if refreshed_caption_bytes:
+                player_response = refreshed_player_response
+                track = refreshed_track
+                caption_bytes = refreshed_caption_bytes
+
+    if not caption_bytes:
+        player_response = embedded_player_response
+        track = choose_caption_track(embedded_player_response, source_language)
         caption_url = _caption_json3_url(track.get("baseUrl"))
         caption_bytes = _fetch_bytes(
             caption_url,
             limit=MAX_CAPTION_BYTES,
             accept="application/json,text/plain;q=0.9",
         )
-    if not caption_bytes:
+    if not caption_bytes or track is None:
         raise APIError(502, "empty_caption_response", "YouTube returned an empty caption track.")
     try:
         caption_payload = json.loads(caption_bytes.decode("utf-8-sig"))

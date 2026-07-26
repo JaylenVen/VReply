@@ -1,9 +1,33 @@
+import gzip
+import io
 import os
 import json
 import unittest
 from unittest.mock import patch
 
 import server
+
+
+class UpstreamResponseTests(unittest.TestCase):
+    class FakeResponse(io.BytesIO):
+        def __init__(self, body: bytes, content_encoding: str = "") -> None:
+            super().__init__(body)
+            self.headers = {"Content-Encoding": content_encoding}
+
+    def test_gzip_response_is_decompressed_with_decoded_size_limit(self) -> None:
+        payload = b"caption data" * 20
+        response = self.FakeResponse(gzip.compress(payload), "gzip")
+
+        self.assertEqual(server._read_upstream_body(response, limit=len(payload)), payload)
+
+    def test_gzip_response_rejects_decoded_body_over_limit(self) -> None:
+        payload = b"caption data" * 20
+        response = self.FakeResponse(gzip.compress(payload), "gzip")
+
+        with self.assertRaises(server.APIError) as raised:
+            server._read_upstream_body(response, limit=len(payload) - 1)
+
+        self.assertEqual(raised.exception.code, "upstream_too_large")
 
 
 class NormalizeJson3SegmentsTests(unittest.TestCase):
@@ -223,6 +247,39 @@ class NormalizeJson3SegmentsTests(unittest.TestCase):
 
 
 class CaptionTrackSelectionTests(unittest.TestCase):
+    def test_innertube_can_use_android_context_without_watch_page_config(self) -> None:
+        response = {"captions": {"playerCaptionsTracklistRenderer": {"captionTracks": []}}}
+
+        with patch.object(
+            server,
+            "_post_json_bytes",
+            return_value=json.dumps(response).encode(),
+        ) as post:
+            result = server.fetch_innertube_player("SVWmuJx0hHM")
+
+        self.assertEqual(result, response)
+        self.assertNotIn("key=", post.call_args.args[0])
+        self.assertEqual(post.call_args.args[1]["context"]["client"]["clientName"], "ANDROID")
+
+    def test_innertube_prefers_android_context_and_stops_when_it_has_captions(self) -> None:
+        page_context = {"client": {"clientName": "WEB", "clientVersion": "1.0"}}
+        response = {"captions": {"playerCaptionsTracklistRenderer": {"captionTracks": []}}}
+
+        with patch.object(
+            server,
+            "extract_innertube_config",
+            return_value=("test-key", page_context),
+        ), patch.object(
+            server,
+            "_post_json_bytes",
+            return_value=json.dumps(response).encode(),
+        ) as post:
+            result = server.fetch_innertube_player("SVWmuJx0hHM", "watch")
+
+        self.assertEqual(result, response)
+        self.assertEqual(post.call_count, 1)
+        self.assertEqual(post.call_args.args[1]["context"]["client"]["clientName"], "ANDROID")
+
     def test_spanish_manual_track_wins_over_automatic_track(self) -> None:
         response = {
             "captions": {
@@ -333,10 +390,14 @@ class CaptionTrackSelectionTests(unittest.TestCase):
                 ]
             }
         ).encode()
-        with patch.object(server, "extract_player_response", return_value=response), patch.object(
+        with patch.object(
+            server,
+            "fetch_innertube_player",
+            return_value=response,
+        ) as refresh, patch.object(
             server,
             "_fetch_bytes",
-            side_effect=[b"watch", manual, timing],
+            side_effect=[manual, timing],
         ) as fetch:
             result = server.transcribe_youtube("https://youtu.be/SVWmuJx0hHM", "en")
 
@@ -346,7 +407,8 @@ class CaptionTrackSelectionTests(unittest.TestCase):
             [word["start"] for word in result["segments"][0]["words"]],
             [0.0, 0.18, 0.72, 0.86],
         )
-        self.assertEqual(fetch.call_count, 3)
+        self.assertEqual(fetch.call_count, 2)
+        refresh.assert_called_once()
 
     def test_transcript_cache_is_separated_by_learning_language(self) -> None:
         with server._CACHE_LOCK:
@@ -374,6 +436,10 @@ class CaptionTrackSelectionTests(unittest.TestCase):
         }).encode()
         with patch.object(server, "extract_player_response", return_value=response), patch.object(
             server,
+            "fetch_innertube_player",
+            side_effect=server.APIError(502, "refresh_failed", "refresh failed"),
+        ) as refresh, patch.object(
+            server,
             "_fetch_bytes",
             side_effect=[b"watch", captions, b"watch", captions],
         ) as fetch:
@@ -386,6 +452,7 @@ class CaptionTrackSelectionTests(unittest.TestCase):
         self.assertNotEqual(english["transcriptId"], spanish["transcriptId"])
         self.assertTrue(english_cached["cached"])
         self.assertEqual(fetch.call_count, 4)
+        self.assertEqual(refresh.call_count, 4)
 
 
 class TranscriptCasingTests(unittest.TestCase):

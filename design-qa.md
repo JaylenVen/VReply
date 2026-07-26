@@ -1,35 +1,47 @@
-# Design QA
+# Design QA — VReply V2.5.6 首页
 
-- Source visual truth: `C:\Users\28022\AppData\Local\Temp\codex-clipboard-a9404a1a-ad29-4617-899d-01036127f941.png`
-- Implementation screenshot: unavailable; the Codex in-app browser could not connect to the local VReply server and local-file navigation is blocked by browser policy.
-- Intended viewport: 2048×968 browser content, matching the supplied 2048px-wide desktop reference.
-- State: practice workspace, transcript tab active, bilingual subtitles visible, video paused.
-- Full-view comparison evidence: blocked because no browser-rendered implementation screenshot could be captured.
-- Focused region comparison evidence: blocked for the same reason; the player shell, bilingual caption sizes, transcript width, and transcript-tab badge could not be compared visually.
+- Source visual truth: `C:\Users\28022\.codex\visualizations\2026\07\26\019f9eed-c41a-70c1-bcc2-b1e7b6d0e4d5\vreply-v2.5.6-audit\01-home-before.png`
+- Implementation screenshot: `C:\Users\28022\.codex\visualizations\2026\07\26\019f9eed-c41a-70c1-bcc2-b1e7b6d0e4d5\vreply-v2.5.6-audit\02-home-after.png`
+- Mobile screenshot: `C:\Users\28022\.codex\visualizations\2026\07\26\019f9eed-c41a-70c1-bcc2-b1e7b6d0e4d5\vreply-v2.5.6-audit\03-home-mobile.png`
+- Combined comparison: `C:\Users\28022\.codex\visualizations\2026\07\26\019f9eed-c41a-70c1-bcc2-b1e7b6d0e4d5\vreply-v2.5.6-audit\04-before-after-comparison.png`
+- Viewport: desktop 1280 × 720 CSS px; mobile 390 × 844 CSS px.
+- Pixel dimensions and density: source and desktop implementation are both 1280 × 720 at device pixel ratio 1; no density normalization was required.
+- State: 首页默认状态，英语已选中，链接输入为空。
+- Full-view comparison evidence: the combined image shows the full-width glass header shell removed while the brand and header actions remain in place; the hero and background image remain unchanged.
+- Focused region comparison evidence: the same right-side crop shows the import card reduced from about 309px to 177px high, with the heading, explanation, and footnote removed. The selected language and URL field use brighter surfaces and higher text contrast.
 
 ## Findings
 
-- No source-level P0 issue was found in the requested interactions: transcript and summary sentence jumps now pass the current playback state into the seek operation, and the seek operation explicitly preserves play or pause.
-- The requested layout and typography values are present in the final CSS cascade: one visible outer video shell, a 400–540px desktop transcript column, 17px base caption translation, 12.5px base transcript translation, and 13.5px active transcript translation at 100% scale.
-- The transcript count is hidden whenever the transcript tab is not active.
-- Performance changes are present but need browser profiling for final confirmation: off-screen transcript rows use `content-visibility`, smooth scrolling and per-row layout transforms were removed, active-row lookup is cached, word segmentation is reused, and hover lookup pauses while the transcript is scrolling.
-- Automated verification passed: `node --check app.js` and all 34 Python unit tests.
+- No actionable P0, P1, or P2 issues remain.
+- Fonts and typography: hero typography and control fonts are unchanged; only the requested explanatory copy was removed. The remaining placeholder is short and readable.
+- Spacing and layout rhythm: the import card is materially lighter and shorter without disturbing the hero composition. Desktop and mobile have no horizontal overflow.
+- Colors and visual tokens: the existing warm-gold and liquid-glass palette is preserved; selected language, URL field, icon, and placeholder contrast are brighter.
+- Image quality and asset fidelity: the supplied landing images, crop, lighting, and motion treatment are unchanged.
+- Copy and content: visible intake copy is reduced to language choices, `粘贴 YouTube 链接`, and the import action. The displayed and accessible version are both `V2.5.6`.
+- Interaction and accessibility: English/Spanish switching keeps the short placeholder; the URL input can be filled and cleared; the input has an explicit accessible label. Browser console reported no warnings or errors.
+- Responsive check: the 390 × 844 layout keeps the header controls, hero, import card, and version visible with no horizontal overflow.
 
 ## Open Questions
 
-- Browser-rendered spacing, exact visual fidelity, and subjective scroll/hover smoothness remain unverified because the required local browser capture was unavailable.
+- None.
 
 ## Implementation Checklist
 
-- Capture the updated workspace at 2048×968 when local browser access is available.
-- Compare it side by side with the supplied reference.
-- Exercise paused sentence switching, playing sentence switching, transcript scrolling, word hover, and transcript/summary badge visibility.
-- Fix any resulting P0/P1/P2 differences and repeat the comparison.
+- Remove the full-width header glass shell while retaining brand and actions.
+- Remove the three requested explanatory text groups.
+- Shorten the URL placeholder and prevent language switching from restoring the old long copy.
+- Brighten the compact import controls without changing the established palette.
+- Update the visible and accessible version to `V2.5.6`.
+- Verify desktop, mobile, interaction states, console output, syntax, and unit tests.
 
 ## Comparison History
 
-1. The reference image was opened at original resolution and used to define the intended single-shell player hierarchy and wider transcript proportion.
-2. The implementation was updated and passed syntax plus unit tests.
-3. Browser navigation to the local server failed, so no post-fix visual comparison could be completed.
+1. Baseline capture found a competing full-width glass header and a copy-heavy 309px import card.
+2. First implementation removed the header shell and reduced the card, but browser verification found that language initialization still restored the old long placeholder. The JavaScript language update was corrected.
+3. Final desktop and mobile captures show the short placeholder, transparent header shell, compact bright card, no overflow, and no console warnings or errors.
 
-final result: blocked
+## Follow-up Polish
+
+- No P3 follow-up is required for the requested scope.
+
+final result: passed
