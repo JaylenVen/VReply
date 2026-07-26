@@ -23,6 +23,7 @@ import socket
 import sqlite3
 import threading
 from collections import OrderedDict
+from difflib import SequenceMatcher
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -454,6 +455,32 @@ def choose_caption_track(player_response: dict[str, Any], source_language: Any) 
     return candidates[0][1]
 
 
+def choose_word_timing_track(
+    player_response: dict[str, Any],
+    source_language: Any,
+    primary_track: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Return a same-language ASR track that can time a manual transcript."""
+
+    source_language = _validate_source_language(source_language)
+    if str(primary_track.get("kind") or "").lower() == "asr":
+        return None
+    try:
+        tracks = player_response["captions"]["playerCaptionsTracklistRenderer"]["captionTracks"]
+    except (KeyError, TypeError):
+        return None
+    candidates: list[tuple[tuple[int, int], dict[str, Any]]] = []
+    for index, track in enumerate(tracks if isinstance(tracks, list) else []):
+        if not isinstance(track, dict) or str(track.get("kind") or "").lower() != "asr":
+            continue
+        language_code = str(track.get("languageCode") or "").lower()
+        if language_code != source_language and not language_code.startswith(source_language + "-"):
+            continue
+        candidates.append(((0 if language_code == source_language else 1, index), track))
+    candidates.sort(key=lambda item: item[0])
+    return candidates[0][1] if candidates else None
+
+
 def _caption_json3_url(base_url: Any) -> str:
     if not isinstance(base_url, str) or not _is_safe_upstream_url(base_url, caption=True):
         raise APIError(502, "invalid_caption_track", "YouTube returned an invalid caption-track address.")
@@ -583,13 +610,60 @@ def normalize_transcript_casing(
     return normalized
 
 
+def _word_duration_weight(text: str) -> float:
+    letters = "".join(re.findall(r"[^\W\d_]", text.casefold(), flags=re.UNICODE))
+    if not letters:
+        return 1.0
+    vowel_groups = re.findall(r"[aeiouyáéíóúü]+", letters)
+    syllables = max(1, len(vowel_groups))
+    return 0.55 + syllables * 0.42 + len(letters) * 0.035
+
+
+def _word_pause_weight(text: str) -> float:
+    token = text.rstrip('"\'’”)]}')
+    if token.endswith(("?", "!", ".")):
+        return 0.46
+    if token.endswith((",", ";", ":")):
+        return 0.22
+    if token.endswith(("-", "–", "—")):
+        return 0.16
+    return 0.03
+
+
+def _allocate_word_ranges(
+    tokens: list[str],
+    start_ms: float,
+    end_ms: float,
+) -> list[tuple[str, float, float]]:
+    """Allocate an untimed phrase by word shape and punctuation, not equal slices."""
+
+    if not tokens:
+        return []
+    span = max(0.0, end_ms - start_ms)
+    word_weights = [_word_duration_weight(token) for token in tokens]
+    pause_weights = [_word_pause_weight(token) for token in tokens]
+    pause_weights[-1] = 0.0
+    total_weight = sum(word_weights) + sum(pause_weights)
+    cursor = start_ms
+    ranges: list[tuple[str, float, float]] = []
+    for token, word_weight, pause_weight in zip(tokens, word_weights, pause_weights):
+        word_span = span * word_weight / total_weight if total_weight else 0.0
+        word_end = min(end_ms, cursor + word_span)
+        ranges.append((token, cursor, word_end))
+        cursor = min(end_ms, word_end + (span * pause_weight / total_weight if total_weight else 0.0))
+    if ranges:
+        token, word_start, _word_end = ranges[-1]
+        ranges[-1] = (token, word_start, end_ms)
+    return ranges
+
+
 def _caption_words(
     segments: list[Any],
     *,
     start: float,
     end: float,
 ) -> list[dict[str, Any]]:
-    """Preserve JSON3 word offsets and infer only the missing boundaries."""
+    """Preserve native word starts and infer missing ranges non-uniformly."""
 
     cue_duration_ms = max(0.0, (end - start) * 1000.0)
     pieces: list[tuple[list[str], float | None]] = []
@@ -607,42 +681,36 @@ def _caption_words(
     if not pieces:
         return []
 
-    word_starts: list[tuple[str, float]] = []
-    previous_offset = 0.0
-    for index, (tokens, explicit_offset) in enumerate(pieces):
-        piece_start = explicit_offset if explicit_offset is not None else previous_offset
-        if index == 0 and explicit_offset is None:
-            piece_start = 0.0
-
-        piece_end = cue_duration_ms
-        for _later_tokens, later_offset in pieces[index + 1 :]:
-            if later_offset is not None and later_offset > piece_start:
-                piece_end = later_offset
-                break
-        piece_end = max(piece_start, piece_end)
-        span = piece_end - piece_start
-        for token_index, token in enumerate(tokens):
-            relative_start = piece_start + (span * token_index / len(tokens) if span > 0 else 0.0)
-            word_starts.append((token, min(cue_duration_ms, relative_start)))
-        previous_offset = piece_start
-
-    words: list[dict[str, Any]] = []
-    for index, (text, relative_start_ms) in enumerate(word_starts):
-        next_start_ms = (
-            word_starts[index + 1][1]
-            if index + 1 < len(word_starts)
-            else cue_duration_ms
+    if not any(offset is not None for _tokens, offset in pieces):
+        relative_ranges = _allocate_word_ranges(
+            [token for tokens, _offset in pieces for token in tokens],
+            0.0,
+            cue_duration_ms,
         )
-        word_start = start + relative_start_ms / 1000.0
-        word_end = start + max(relative_start_ms, next_start_ms) / 1000.0
-        words.append(
-            {
-                "text": text,
-                "start": round(min(end, word_start), 3),
-                "end": round(min(end, max(word_start, word_end)), 3),
-            }
-        )
-    return words
+    else:
+        relative_ranges: list[tuple[str, float, float]] = []
+        previous_offset = 0.0
+        for index, (tokens, explicit_offset) in enumerate(pieces):
+            piece_start = explicit_offset if explicit_offset is not None else previous_offset
+            if index == 0 and explicit_offset is None:
+                piece_start = 0.0
+            piece_end = cue_duration_ms
+            for _later_tokens, later_offset in pieces[index + 1 :]:
+                if later_offset is not None and later_offset > piece_start:
+                    piece_end = later_offset
+                    break
+            piece_end = max(piece_start, piece_end)
+            relative_ranges.extend(_allocate_word_ranges(tokens, piece_start, piece_end))
+            previous_offset = piece_start
+
+    return [
+        {
+            "text": text,
+            "start": round(min(end, start + relative_start_ms / 1000.0), 3),
+            "end": round(min(end, start + max(relative_start_ms, relative_end_ms) / 1000.0), 3),
+        }
+        for text, relative_start_ms, relative_end_ms in relative_ranges
+    ]
 
 
 def _word_ends_sentence(text: str) -> bool:
@@ -759,6 +827,167 @@ def _inferred_word_seconds(cues: list[dict[str, Any]]) -> float | None:
     return max(0.3, min(0.65, median * 1.5))
 
 
+def _median(values: list[float], default: float) -> float:
+    if not values:
+        return default
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2.0
+
+
+def _trim_word_dwells(cues: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """End a highlight before a long post-word pause while preserving starts."""
+
+    normalized = copy.deepcopy(cues)
+    words = [
+        word
+        for cue in normalized
+        for word in cue.get("words", [])
+        if isinstance(word, dict) and str(word.get("text") or "").strip()
+    ]
+    if not words:
+        return normalized
+
+    def cadence_at(index: int) -> float:
+        rates: list[float] = []
+        for sample_index in range(max(0, index - 4), min(len(words) - 1, index + 5)):
+            gap = _finite_number(words[sample_index + 1].get("start")) - _finite_number(
+                words[sample_index].get("start")
+            )
+            if 0.04 <= gap <= 0.8:
+                rates.append(gap / _word_duration_weight(str(words[sample_index].get("text") or "")))
+        return _median(rates, global_cadence)
+
+    global_rates: list[float] = []
+    for index in range(len(words) - 1):
+        gap = _finite_number(words[index + 1].get("start")) - _finite_number(words[index].get("start"))
+        if 0.04 <= gap <= 0.8:
+            global_rates.append(gap / _word_duration_weight(str(words[index].get("text") or "")))
+    global_cadence = _median(global_rates, 0.16)
+
+    for index, word in enumerate(words):
+        start = _finite_number(word.get("start"))
+        end = max(start, _finite_number(word.get("end"), start))
+        predicted = _word_duration_weight(str(word.get("text") or "")) * cadence_at(index) * 1.15
+        predicted = max(0.16, min(0.65, predicted))
+        punctuation_floor = 0.55 if re.search(r"[.!?,;:]$", str(word.get("text") or "")) else 0.72
+        if end - start > max(punctuation_floor, predicted * 2.4):
+            word["end"] = round(min(end, start + predicted), 3)
+
+    for cue in normalized:
+        cue_words = [word for word in cue.get("words", []) if isinstance(word, dict)]
+        if cue_words:
+            cue["start"] = round(_finite_number(cue_words[0].get("start")), 3)
+            cue["end"] = round(
+                max(_finite_number(cue["start"]) + 0.05, _finite_number(cue_words[-1].get("end"))),
+                3,
+            )
+    return normalized
+
+
+def _alignment_key(text: Any) -> str:
+    return re.sub(r"[\W_]+", "", str(text or "").casefold(), flags=re.UNICODE)
+
+
+def _word_refs(segments: list[dict[str, Any]]) -> list[tuple[int, int, dict[str, Any]]]:
+    return [
+        (segment_index, word_index, word)
+        for segment_index, segment in enumerate(segments)
+        for word_index, word in enumerate(segment.get("words", []))
+        if isinstance(word, dict) and _alignment_key(word.get("text"))
+    ]
+
+
+def align_word_timings(
+    primary_segments: list[dict[str, Any]],
+    timing_segments: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], float] | None:
+    """Align accurate caption text to a same-language word-timed ASR track."""
+
+    primary_refs = _word_refs(primary_segments)
+    timing_refs = _word_refs(timing_segments)
+    if not primary_refs or not timing_refs:
+        return None
+    matcher = SequenceMatcher(
+        None,
+        [_alignment_key(word.get("text")) for _segment, _index, word in primary_refs],
+        [_alignment_key(word.get("text")) for _segment, _index, word in timing_refs],
+    )
+    opcodes = matcher.get_opcodes()
+    exact_matches = sum(i2 - i1 for tag, i1, i2, _j1, _j2 in opcodes if tag == "equal")
+    coverage = exact_matches / len(primary_refs)
+    if coverage < 0.72:
+        return None
+
+    mapped: list[dict[str, Any] | None] = [None] * len(primary_refs)
+    for tag, i1, i2, j1, j2 in opcodes:
+        if tag == "equal" or tag == "replace" and i2 - i1 == j2 - j1:
+            for primary_index, timing_index in zip(range(i1, i2), range(j1, j2)):
+                mapped[primary_index] = timing_refs[timing_index][2]
+
+    cursor = 0
+    while cursor < len(mapped):
+        if mapped[cursor] is not None:
+            cursor += 1
+            continue
+        run_end = cursor + 1
+        while run_end < len(mapped) and mapped[run_end] is None:
+            run_end += 1
+        previous = mapped[cursor - 1] if cursor > 0 else None
+        following = mapped[run_end] if run_end < len(mapped) else None
+        if previous is not None and following is not None:
+            range_start = _finite_number(previous.get("end"))
+            range_end = _finite_number(following.get("start"))
+            if 0 < range_end - range_start <= max(2.5, (run_end - cursor) * 0.9):
+                ranges = _allocate_word_ranges(
+                    [str(primary_refs[index][2].get("text") or "") for index in range(cursor, run_end)],
+                    range_start * 1000.0,
+                    range_end * 1000.0,
+                )
+                for index, (text, start_ms, end_ms) in zip(range(cursor, run_end), ranges):
+                    mapped[index] = {
+                        "text": text,
+                        "start": round(start_ms / 1000.0, 3),
+                        "end": round(end_ms / 1000.0, 3),
+                    }
+        cursor = run_end
+
+    aligned = copy.deepcopy(primary_segments)
+    for ref_index, timing_word in enumerate(mapped):
+        if timing_word is None:
+            continue
+        segment_index, word_index, _word = primary_refs[ref_index]
+        target = aligned[segment_index]["words"][word_index]
+        target["start"] = round(_finite_number(timing_word.get("start")), 3)
+        target["end"] = round(
+            max(_finite_number(target["start"]), _finite_number(timing_word.get("end"))),
+            3,
+        )
+    for segment in aligned:
+        words = [word for word in segment.get("words", []) if isinstance(word, dict)]
+        if words:
+            segment["start"] = round(_finite_number(words[0].get("start")), 3)
+            segment["end"] = round(
+                max(_finite_number(segment["start"]) + 0.05, _finite_number(words[-1].get("end"))),
+                3,
+            )
+    return _trim_word_dwells(aligned), coverage
+
+
+def _caption_payload_has_word_offsets(payload: Any) -> bool:
+    return bool(
+        isinstance(payload, dict)
+        and any(
+            isinstance(segment, dict) and "tOffsetMs" in segment
+            for event in payload.get("events", [])
+            if isinstance(event, dict) and isinstance(event.get("segs"), list)
+            for segment in event["segs"]
+        )
+    )
+
+
 def normalize_json3_segments(payload: Any) -> list[dict[str, Any]]:
     """Convert YouTube JSON3 events to word-timed, sentence-sized segments."""
 
@@ -849,6 +1078,8 @@ def normalize_json3_segments(payload: Any) -> list[dict[str, Any]]:
 
     if not result:
         raise APIError(404, "empty_captions", "The selected caption track is empty.")
+    if any(cue["has_word_offsets"] for cue in cues):
+        result = _trim_word_dwells(result)
     return _sentence_segments(result)
 
 
@@ -995,6 +1226,31 @@ def transcribe_youtube(url: Any, source_language: Any = "en") -> dict[str, Any]:
 
     metadata = _metadata(video_id, player_response, track, source_language)
     raw_segments = normalize_json3_segments(caption_payload)
+    word_timing = "native" if _caption_payload_has_word_offsets(caption_payload) else "inferred"
+    if word_timing == "inferred":
+        timing_track = choose_word_timing_track(player_response, source_language, track)
+        if timing_track is not None:
+            try:
+                timing_bytes = _fetch_bytes(
+                    _caption_json3_url(timing_track.get("baseUrl")),
+                    limit=MAX_CAPTION_BYTES,
+                    accept="application/json,text/plain;q=0.9",
+                )
+                timing_payload = json.loads(timing_bytes.decode("utf-8-sig")) if timing_bytes else None
+                if _caption_payload_has_word_offsets(timing_payload):
+                    alignment = align_word_timings(
+                        raw_segments,
+                        normalize_json3_segments(timing_payload),
+                    )
+                    if alignment is not None:
+                        raw_segments, coverage = alignment
+                        metadata["captions"]["wordTimingCoverage"] = round(coverage, 4)
+                        word_timing = "aligned-asr"
+            except (APIError, UnicodeError, json.JSONDecodeError):
+                # Accurate manual captions remain usable when the optional
+                # word-timing track is unavailable or malformed.
+                pass
+    metadata["captions"]["wordTiming"] = word_timing
     segments = normalize_transcript_casing(raw_segments, metadata) if source_language == "en" else raw_segments
     metadata["captions"]["casingNormalized"] = segments is not raw_segments
     result = {"segments": segments, "metadata": metadata}

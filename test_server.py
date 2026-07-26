@@ -44,23 +44,49 @@ class NormalizeJson3SegmentsTests(unittest.TestCase):
         self.assertEqual(result[0]["words"][1]["start"], 4.28)
         self.assertEqual(result[1]["words"][-1]["end"], 6.24)
 
-    def test_words_without_offsets_are_evenly_inferred(self) -> None:
+    def test_words_without_offsets_use_text_aware_nonuniform_timing(self) -> None:
         payload = {
             "events": [
                 {
                     "tStartMs": 1000,
                     "dDurationMs": 3000,
-                    "segs": [{"utf8": "One two three"}],
+                    "segs": [{"utf8": "I accelerate, then slow"}],
                 }
             ]
         }
 
         result = server.normalize_json3_segments(payload)
+        words = result[0]["words"]
+        durations = [round(word["end"] - word["start"], 3) for word in words]
 
-        self.assertEqual(
-            [(word["start"], word["end"]) for word in result[0]["words"]],
-            [(1.0, 2.0), (2.0, 3.0), (3.0, 4.0)],
-        )
+        self.assertEqual(words[0]["start"], 1.0)
+        self.assertEqual(words[-1]["end"], 4.0)
+        self.assertGreater(durations[1], durations[0])
+        self.assertGreater(words[2]["start"] - words[1]["end"], words[1]["start"] - words[0]["end"])
+
+    def test_native_word_starts_keep_variable_speed_and_trim_the_final_dwell(self) -> None:
+        payload = {
+            "events": [
+                {
+                    "tStartMs": 1000,
+                    "dDurationMs": 3000,
+                    "segs": [
+                        {"utf8": "Start"},
+                        {"utf8": " slowly,", "tOffsetMs": 280},
+                        {"utf8": " then", "tOffsetMs": 760},
+                        {"utf8": " race", "tOffsetMs": 880},
+                        {"utf8": " now.", "tOffsetMs": 1010},
+                    ],
+                }
+            ]
+        }
+
+        result = server.normalize_json3_segments(payload)
+        words = result[0]["words"]
+
+        self.assertEqual([word["start"] for word in words], [1.0, 1.28, 1.76, 1.88, 2.01])
+        self.assertLess(words[-1]["end"], 2.7)
+        self.assertLess(result[0]["end"], 2.7)
 
     def test_fragments_are_merged_until_sentence_punctuation(self) -> None:
         payload = {
@@ -154,6 +180,47 @@ class NormalizeJson3SegmentsTests(unittest.TestCase):
         self.assertLess(last_word["end"], 7.0)
         self.assertEqual(last_word["text"], "wrong.")
 
+    def test_manual_text_can_use_nonuniform_timings_from_an_asr_track(self) -> None:
+        primary = [
+            {
+                "id": 1,
+                "start": 0.0,
+                "end": 4.0,
+                "text": "Start slowly, then race.",
+                "words": [
+                    {"text": "Start", "start": 0.0, "end": 1.0},
+                    {"text": "slowly,", "start": 1.0, "end": 2.0},
+                    {"text": "then", "start": 2.0, "end": 3.0},
+                    {"text": "race.", "start": 3.0, "end": 4.0},
+                ],
+            }
+        ]
+        timing = [
+            {
+                "id": 1,
+                "start": 0.0,
+                "end": 1.2,
+                "text": "Start slowly then race",
+                "words": [
+                    {"text": "Start", "start": 0.0, "end": 0.18},
+                    {"text": "slowly", "start": 0.18, "end": 0.72},
+                    {"text": "then", "start": 0.72, "end": 0.86},
+                    {"text": "race", "start": 0.86, "end": 1.2},
+                ],
+            }
+        ]
+
+        alignment = server.align_word_timings(primary, timing)
+
+        self.assertIsNotNone(alignment)
+        aligned, coverage = alignment
+        self.assertEqual(coverage, 1.0)
+        self.assertEqual(
+            [word["start"] for word in aligned[0]["words"]],
+            [0.0, 0.18, 0.72, 0.86],
+        )
+        self.assertEqual(aligned[0]["text"], primary[0]["text"])
+
 
 class CaptionTrackSelectionTests(unittest.TestCase):
     def test_spanish_manual_track_wins_over_automatic_track(self) -> None:
@@ -180,6 +247,28 @@ class CaptionTrackSelectionTests(unittest.TestCase):
 
         self.assertEqual(selected["languageCode"], "es-419")
 
+    def test_manual_track_can_borrow_word_timing_from_same_language_asr(self) -> None:
+        manual = {
+            "languageCode": "en",
+            "baseUrl": "https://www.youtube.com/api/timedtext?manual=1",
+        }
+        automatic = {
+            "languageCode": "en",
+            "kind": "asr",
+            "baseUrl": "https://www.youtube.com/api/timedtext?auto=1",
+        }
+        response = {
+            "captions": {
+                "playerCaptionsTracklistRenderer": {
+                    "captionTracks": [manual, automatic],
+                }
+            }
+        }
+
+        selected = server.choose_word_timing_track(response, "en", manual)
+
+        self.assertIs(selected, automatic)
+
     def test_missing_requested_language_has_a_specific_error(self) -> None:
         response = {
             "captions": {
@@ -193,6 +282,71 @@ class CaptionTrackSelectionTests(unittest.TestCase):
             server.choose_caption_track(response, "es")
 
         self.assertEqual(raised.exception.code, "es_captions_unavailable")
+
+    def test_transcription_aligns_manual_text_to_optional_asr_word_timing(self) -> None:
+        with server._CACHE_LOCK:
+            server._CACHE.clear()
+            server._TRANSCRIPT_INDEX.clear()
+        response = {
+            "videoDetails": {"title": "Variable pace", "lengthSeconds": "4"},
+            "captions": {
+                "playerCaptionsTracklistRenderer": {
+                    "captionTracks": [
+                        {
+                            "languageCode": "en",
+                            "baseUrl": "https://www.youtube.com/api/timedtext?manual=1",
+                            "name": {"simpleText": "English"},
+                        },
+                        {
+                            "languageCode": "en",
+                            "kind": "asr",
+                            "baseUrl": "https://www.youtube.com/api/timedtext?auto=1",
+                        },
+                    ]
+                }
+            },
+        }
+        manual = json.dumps(
+            {
+                "events": [
+                    {
+                        "tStartMs": 0,
+                        "dDurationMs": 4000,
+                        "segs": [{"utf8": "Start slowly, then race."}],
+                    }
+                ]
+            }
+        ).encode()
+        timing = json.dumps(
+            {
+                "events": [
+                    {
+                        "tStartMs": 0,
+                        "dDurationMs": 4000,
+                        "segs": [
+                            {"utf8": "Start"},
+                            {"utf8": " slowly", "tOffsetMs": 180},
+                            {"utf8": " then", "tOffsetMs": 720},
+                            {"utf8": " race", "tOffsetMs": 860},
+                        ],
+                    }
+                ]
+            }
+        ).encode()
+        with patch.object(server, "extract_player_response", return_value=response), patch.object(
+            server,
+            "_fetch_bytes",
+            side_effect=[b"watch", manual, timing],
+        ) as fetch:
+            result = server.transcribe_youtube("https://youtu.be/SVWmuJx0hHM", "en")
+
+        self.assertEqual(result["metadata"]["captions"]["wordTiming"], "aligned-asr")
+        self.assertEqual(result["metadata"]["captions"]["wordTimingCoverage"], 1.0)
+        self.assertEqual(
+            [word["start"] for word in result["segments"][0]["words"]],
+            [0.0, 0.18, 0.72, 0.86],
+        )
+        self.assertEqual(fetch.call_count, 3)
 
     def test_transcript_cache_is_separated_by_learning_language(self) -> None:
         with server._CACHE_LOCK:
