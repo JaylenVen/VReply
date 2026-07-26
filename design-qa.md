@@ -1,25 +1,27 @@
-# Design QA — VReply V2.5.6 首页
+# Design QA — VReply 极简首页背景
 
-- Source visual truth: `C:\Users\28022\.codex\visualizations\2026\07\26\019f9eed-c41a-70c1-bcc2-b1e7b6d0e4d5\vreply-v2.5.6-audit\01-home-before.png`
-- Implementation screenshot: `C:\Users\28022\.codex\visualizations\2026\07\26\019f9eed-c41a-70c1-bcc2-b1e7b6d0e4d5\vreply-v2.5.6-audit\02-home-after.png`
-- Mobile screenshot: `C:\Users\28022\.codex\visualizations\2026\07\26\019f9eed-c41a-70c1-bcc2-b1e7b6d0e4d5\vreply-v2.5.6-audit\03-home-mobile.png`
-- Combined comparison: `C:\Users\28022\.codex\visualizations\2026\07\26\019f9eed-c41a-70c1-bcc2-b1e7b6d0e4d5\vreply-v2.5.6-audit\04-before-after-comparison.png`
-- Viewport: desktop 1280 × 720 CSS px; mobile 390 × 844 CSS px.
-- Pixel dimensions and density: source and desktop implementation are both 1280 × 720 at device pixel ratio 1; no density normalization was required.
+- Source visual truth: `C:\Users\28022\.codex\generated_images\019f9eed-c41a-70c1-bcc2-b1e7b6d0e4d5\call_Ogy7EIPcwQSBNCnpHiTrpES9.png`
+- Normalized source: `C:\Users\28022\.codex\visualizations\2026\07\26\019f9eed-c41a-70c1-bcc2-b1e7b6d0e4d5\vreply-minimal-background-build\01-selected-option-normalized.png`
+- Implementation screenshot: `C:\Users\28022\.codex\visualizations\2026\07\26\019f9eed-c41a-70c1-bcc2-b1e7b6d0e4d5\vreply-minimal-background-build\02-implementation-desktop-final.png`
+- Combined comparison: `C:\Users\28022\.codex\visualizations\2026\07\26\019f9eed-c41a-70c1-bcc2-b1e7b6d0e4d5\vreply-minimal-background-build\03-source-implementation-comparison.png`
+- Mobile screenshot: `C:\Users\28022\.codex\visualizations\2026\07\26\019f9eed-c41a-70c1-bcc2-b1e7b6d0e4d5\vreply-minimal-background-build\04-implementation-mobile.png`
+- Viewports: desktop 1010 × 986 CSS px; mobile 390 × 844 CSS px.
+- Pixel dimensions and density: source 1270 × 1239, normalized source 1010 × 986, desktop implementation 1010 × 986, mobile capture 390 × 843; device pixel ratio 1.
 - State: 首页默认状态，英语已选中，链接输入为空。
-- Full-view comparison evidence: the combined image shows the full-width glass header shell removed while the brand and header actions remain in place; the hero and background image remain unchanged.
-- Focused region comparison evidence: the same right-side crop shows the import card reduced from about 309px to 177px high, with the heading, explanation, and footnote removed. The selected language and URL field use brighter surfaces and higher text contrast.
+- Full-view comparison evidence: the combined image compares the selected option and the live implementation at the same desktop dimensions. Both use a near-black, low-contrast velvet field with a restrained warm haze and no door, beam, horizon line, or illustrative object.
+- Focused comparison evidence: the requested change occupies the full canvas, so the normalized full-frame comparison is also the focused background comparison. The implementation keeps the real product UI rather than reproducing incidental UI drift introduced by the generated concept image.
 
 ## Findings
 
 - No actionable P0, P1, or P2 issues remain.
-- Fonts and typography: hero typography and control fonts are unchanged; only the requested explanatory copy was removed. The remaining placeholder is short and readable.
-- Spacing and layout rhythm: the import card is materially lighter and shorter without disturbing the hero composition. Desktop and mobile have no horizontal overflow.
-- Colors and visual tokens: the existing warm-gold and liquid-glass palette is preserved; selected language, URL field, icon, and placeholder contrast are brighter.
-- Image quality and asset fidelity: the supplied landing images, crop, lighting, and motion treatment are unchanged.
-- Copy and content: visible intake copy is reduced to language choices, `粘贴 YouTube 链接`, and the import action. The displayed and accessible version are both `V2.5.6`.
-- Interaction and accessibility: English/Spanish switching keeps the short placeholder; the URL input can be filled and cleared; the input has an explicit accessible label. Browser console reported no warnings or errors.
-- Responsive check: the 390 × 844 layout keeps the header controls, hero, import card, and version visible with no horizontal overflow.
+- Typography and copy: the existing logo, hero type, labels, placeholder, action text, and `V2.5.6` badge are unchanged.
+- Spacing and layout rhythm: the existing desktop and mobile foreground composition is unchanged; neither viewport has horizontal overflow.
+- Colors and visual tokens: the selected near-black palette is preserved. The final background is darkened and desaturated to match the chosen option instead of competing with the gold accent.
+- Image quality and fidelity: the 1440 × 1024 WebP is sharp at both tested viewports. It contains no text, UI, logo, door silhouette, light beam, stripe, or hard edge.
+- Motion treatment: the background has one image layer, no pseudo-element glow layers, `transform: none`, and `transition-duration: 0s`. Moving the pointer across the page leaves the background transform unchanged.
+- Interaction and accessibility: English/Spanish switching works, the YouTube link field accepts input and can be cleared, and the original accessible labels remain intact.
+- Responsive check: the 390 × 844 layout keeps the header, hero, intake card, and `V2.5.6` badge visible with no horizontal overflow.
+- Runtime check: the browser console reported no warnings or errors.
 
 ## Open Questions
 
@@ -27,18 +29,17 @@
 
 ## Implementation Checklist
 
-- Remove the full-width header glass shell while retaining brand and actions.
-- Remove the three requested explanatory text groups.
-- Shorten the URL placeholder and prevent language switching from restoring the old long copy.
-- Brighten the compact import controls without changing the established palette.
-- Update the visible and accessible version to `V2.5.6`.
-- Verify desktop, mobile, interaction states, console output, syntax, and unit tests.
+- Replace the yellow-lit door background with the selected minimalist black-velvet direction.
+- Remove the closed/open background image pair and the door-opening crossfade.
+- Remove animated glow pseudo-elements and the liquid-aurora animation.
+- Keep the existing foreground UI and version badge unchanged.
+- Verify desktop, mobile, language switching, URL input, pointer movement, overflow, and console output.
 
 ## Comparison History
 
-1. Baseline capture found a competing full-width glass header and a copy-heavy 309px import card.
-2. First implementation removed the header shell and reduced the card, but browser verification found that language initialization still restored the old long placeholder. The JavaScript language update was corrected.
-3. Final desktop and mobile captures show the short placeholder, transparent header shell, compact bright card, no overflow, and no console warnings or errors.
+1. The selected concept established a near-black velvet field with only a faint warm haze.
+2. The first implementation pass removed the door and beam but rendered the warm texture slightly too prominently at the audit viewport.
+3. The final pass reduced brightness and saturation, bringing the live background into the selected option’s low-contrast range without changing foreground layout or interaction.
 
 ## Follow-up Polish
 
