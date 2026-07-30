@@ -1,0 +1,1721 @@
+/*
+ * VReply minimal interface
+ * Warm white, graphite and one blue accent.
+ */
+
+:root {
+  --vr-bg: #f6f6f2;
+  --vr-surface: #ffffff;
+  --vr-surface-soft: #f0f0ec;
+  --vr-ink: #191919;
+  --vr-text: #3f3f3d;
+  --vr-muted: #777773;
+  --vr-line: #d9d9d3;
+  --vr-line-strong: #b9b9b2;
+  --vr-accent: #2448d8;
+  --vr-accent-hover: #1738bc;
+  --vr-accent-soft: #edf0ff;
+  --vr-danger: #b83232;
+  --vr-radius: 9px;
+  --vr-font: "Manrope", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --vr-label: "IBM Plex Sans", "Manrope", "Noto Sans SC", sans-serif;
+}
+
+html {
+  min-width: 320px;
+  background: var(--vr-bg);
+  color: var(--vr-ink);
+}
+
+body.vreply-redesign,
+body.vreply-redesign.workspace-active {
+  --canvas: var(--vr-bg);
+  --canvas-deep: var(--vr-bg);
+  --paper: var(--vr-surface);
+  --paper-strong: var(--vr-surface);
+  --ink: var(--vr-ink);
+  --ink-soft: var(--vr-text);
+  --muted: var(--vr-muted);
+  --line: rgba(25, 25, 25, 0.12);
+  --line-light: rgba(25, 25, 25, 0.2);
+  --night: var(--vr-ink);
+  --night-soft: #272727;
+  --acid: var(--vr-accent);
+  --acid-deep: var(--vr-accent-hover);
+  --warm: var(--vr-accent);
+  --accent-rgb: 36, 72, 216;
+  --font-sans: var(--vr-font);
+  --font-serif: var(--vr-font);
+  --font-mono: var(--vr-label);
+  margin: 0;
+  background: var(--vr-bg);
+  color: var(--vr-ink);
+  font-family: var(--vr-font);
+}
+
+.vreply-redesign .page-noise {
+  display: none;
+}
+
+.vreply-redesign button,
+.vreply-redesign input {
+  font-family: var(--vr-font);
+}
+
+.vreply-redesign button:focus-visible,
+.vreply-redesign input:focus-visible,
+.vreply-redesign [tabindex]:focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: 2px;
+}
+
+.vreply-redesign button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Header */
+
+.vreply-redesign .site-header,
+.vreply-redesign:not(.workspace-active) .site-header,
+.vreply-redesign.workspace-active .site-header {
+  position: relative;
+  z-index: 30;
+  display: flex;
+  width: 100%;
+  height: 68px;
+  margin: 0;
+  padding: 0 clamp(18px, 3vw, 44px);
+  align-items: center;
+  border: 0;
+  border-bottom: 1px solid var(--vr-line);
+  border-radius: 0;
+  background: rgba(246, 246, 242, 0.96);
+  box-shadow: none;
+  color: var(--vr-ink);
+  backdrop-filter: blur(12px);
+}
+
+.vreply-redesign .brand,
+.vreply-redesign.workspace-active .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.vreply-redesign .brand-mark,
+.vreply-redesign:not(.workspace-active) .brand-mark {
+  display: block;
+  width: 32px;
+  height: 32px;
+  overflow: visible;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+}
+
+.vreply-redesign .brand-mark svg {
+  width: 100%;
+  height: 100%;
+}
+
+.vreply-redesign .brand-mark svg circle:first-child {
+  fill: var(--vr-accent);
+}
+
+.vreply-redesign .brand-mark svg path {
+  fill: white;
+}
+
+.vreply-redesign .brand-mark .brand-signal {
+  display: none;
+}
+
+.vreply-redesign .brand-name,
+.vreply-redesign:not(.workspace-active) .brand-name {
+  color: var(--vr-ink);
+  font-family: var(--vr-font);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.vreply-redesign .workspace-heading {
+  display: none;
+  min-width: 0;
+}
+
+.vreply-redesign.workspace-active .workspace-heading {
+  display: block;
+  min-width: 0;
+  margin: 0 auto 0 18px;
+  padding-left: 18px;
+  flex: 1 1 auto;
+  border-left: 1px solid var(--vr-line);
+}
+
+.vreply-redesign .workspace-heading h1,
+.vreply-redesign.workspace-active .workspace-heading h1 {
+  max-width: min(52vw, 720px);
+  margin: 0;
+  overflow: hidden;
+  color: var(--vr-text);
+  font-family: var(--vr-font);
+  font-size: clamp(12px, 1vw, 15px);
+  font-weight: 560;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vreply-redesign .header-actions {
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.vreply-redesign .quiet-button,
+.vreply-redesign:not(.workspace-active) .quiet-button {
+  min-width: 40px;
+  min-height: 40px;
+  height: 40px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--vr-text);
+  font-size: 11px;
+  font-weight: 600;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.vreply-redesign .quiet-button:hover,
+.vreply-redesign:not(.workspace-active) .quiet-button:hover {
+  border-color: transparent;
+  background: var(--vr-surface-soft);
+  color: var(--vr-ink);
+  box-shadow: none;
+  transform: none;
+}
+
+.vreply-redesign .quiet-button svg {
+  width: 16px;
+}
+
+.vreply-redesign .learning-time-button > span,
+.vreply-redesign .learning-time-button span::after {
+  display: none;
+}
+
+.vreply-redesign .learning-time-button b,
+.vreply-redesign:not(.workspace-active) .learning-time-button b {
+  color: var(--vr-muted);
+  font-size: 10px;
+}
+
+.vreply-redesign .learning-time-panel {
+  border: 1px solid var(--vr-line);
+  border-radius: var(--vr-radius);
+  background: var(--vr-surface);
+  box-shadow: 0 14px 38px rgba(25, 25, 25, 0.1);
+  color: var(--vr-ink);
+  backdrop-filter: none;
+}
+
+.vreply-redesign .learning-time-panel header > span {
+  color: var(--vr-muted);
+}
+
+.vreply-redesign .learning-time-total strong {
+  color: var(--vr-ink);
+}
+
+.vreply-redesign .learning-time-today {
+  border-color: var(--vr-line);
+}
+
+/* Landing */
+
+.vreply-redesign:not(.workspace-active) {
+  min-height: 100dvh;
+  overflow-y: auto;
+  background: var(--vr-bg);
+}
+
+.vreply-redesign:not(.workspace-active) .app-main {
+  min-height: calc(100dvh - 68px);
+}
+
+.vreply-redesign .landing-view {
+  position: relative;
+  display: grid;
+  width: min(1180px, 100%);
+  min-height: max(calc(var(--app-safe-height, 100dvh) - 68px), 620px);
+  margin: 0 auto;
+  padding: clamp(54px, 8vh, 100px) clamp(24px, 4vw, 54px);
+  overflow: visible;
+  grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
+  align-items: center;
+  gap: clamp(60px, 8vw, 120px);
+}
+
+.vreply-redesign .landing-view::before,
+.vreply-redesign .landing-scene {
+  display: none;
+}
+
+.vreply-redesign .landing-copy {
+  position: relative;
+  z-index: 1;
+  top: auto;
+  left: auto;
+  width: auto;
+  max-width: 680px;
+  transform: none;
+}
+
+.vreply-redesign .landing-view .eyebrow {
+  display: block;
+  width: auto;
+  min-height: 0;
+  margin: 0 0 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--vr-accent);
+  font-family: var(--vr-label);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  backdrop-filter: none;
+}
+
+.vreply-redesign .landing-view .hero-title {
+  display: flex;
+  margin: 0;
+  flex-direction: column;
+  color: var(--vr-ink);
+  font-family: var(--vr-font);
+  font-size: clamp(58px, 6vw, 88px);
+  font-weight: 650;
+  letter-spacing: -0.075em;
+  line-height: 1.02;
+  text-shadow: none;
+}
+
+.vreply-redesign .landing-view .hero-title > span {
+  display: block;
+  transform: none;
+}
+
+.vreply-redesign .landing-view .hero-title-serif {
+  margin: 0.08em 0 0;
+  color: var(--vr-ink);
+  font-family: var(--vr-font);
+  font-size: 1em;
+  font-style: normal;
+  font-weight: 650;
+  letter-spacing: -0.075em;
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+  transform: none;
+}
+
+.vreply-redesign .landing-view .hero-title-serif::after {
+  color: var(--vr-accent);
+  content: "";
+}
+
+.vreply-redesign .landing-view .hero-description {
+  display: block;
+  max-width: 520px;
+  margin: 30px 0 0;
+  padding: 0;
+  border: 0;
+  color: var(--vr-muted);
+  font-family: var(--vr-font);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.vreply-redesign .landing-view .hero-description span {
+  display: inline;
+}
+
+.vreply-redesign .landing-view .hero-description span:first-child {
+  color: var(--vr-text);
+}
+
+.vreply-redesign .landing-view .hero-description span:first-child::after {
+  content: " ";
+}
+
+.vreply-redesign .landing-view .hero-description span:last-child {
+  color: var(--vr-muted);
+}
+
+.vreply-redesign .landing-view .intake-column {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  width: auto;
+  max-width: 480px;
+  margin: 0;
+  perspective: none;
+}
+
+.vreply-redesign .landing-view .intake-card {
+  position: relative;
+  overflow: visible;
+  padding: 24px 0 0;
+  border: 0;
+  border-top: 1px solid var(--vr-ink);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--vr-ink);
+  transform: none;
+  backdrop-filter: none;
+}
+
+.vreply-redesign .landing-view .intake-card:hover {
+  border-color: var(--vr-ink);
+  box-shadow: none;
+  transform: none;
+}
+
+.vreply-redesign .landing-view .intake-card::before,
+.vreply-redesign .landing-view .intake-card::after {
+  display: none;
+}
+
+.vreply-redesign .landing-view .learning-language-picker {
+  margin: 0 0 14px;
+}
+
+.vreply-redesign .landing-view .learning-language-options {
+  display: grid;
+  width: 100%;
+  max-width: none;
+  padding: 3px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--vr-surface-soft);
+  box-shadow: none;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.vreply-redesign .landing-view .learning-language-options label {
+  display: block;
+  cursor: pointer;
+}
+
+.vreply-redesign .landing-view .learning-language-options span {
+  display: flex;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--vr-muted);
+  font-size: 11px;
+  font-weight: 600;
+  gap: 7px;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.vreply-redesign .landing-view .learning-language-options span:hover {
+  color: var(--vr-ink);
+  transform: none;
+}
+
+.vreply-redesign .landing-view .learning-language-options b {
+  display: inline;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-family: var(--vr-label);
+  font-size: 9px;
+}
+
+.vreply-redesign .landing-view .learning-language-options input:checked + span {
+  border: 0;
+  background: var(--vr-surface);
+  color: var(--vr-ink);
+  box-shadow: 0 1px 3px rgba(25, 25, 25, 0.08);
+}
+
+.vreply-redesign .landing-view .learning-language-options input:focus-visible + span {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: 1px;
+}
+
+.vreply-redesign .url-form {
+  display: grid;
+}
+
+.vreply-redesign .url-label {
+  margin: 0 0 7px;
+  color: var(--vr-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.vreply-redesign .landing-view .url-field {
+  display: grid;
+  min-height: 56px;
+  padding: 4px 4px 4px 14px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 8px;
+  background: var(--vr-surface);
+  box-shadow: none;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+  backdrop-filter: none;
+}
+
+.vreply-redesign .landing-view .url-field:focus-within {
+  border-color: var(--vr-accent);
+  box-shadow: 0 0 0 3px rgba(36, 72, 216, 0.1);
+}
+
+.vreply-redesign .landing-view .url-field.has-error {
+  border-color: var(--vr-danger);
+  box-shadow: 0 0 0 3px rgba(184, 50, 50, 0.09);
+}
+
+.vreply-redesign .landing-view .url-icon {
+  width: 17px;
+  fill: none;
+  stroke: var(--vr-muted);
+  stroke-linecap: round;
+  stroke-width: 1.7;
+}
+
+.vreply-redesign .landing-view .url-field input {
+  min-width: 0;
+  height: 46px;
+  padding: 0 8px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--vr-ink);
+  font-size: 13px;
+  font-weight: 450;
+}
+
+.vreply-redesign .landing-view .url-field input::placeholder {
+  color: #9a9a96;
+}
+
+.vreply-redesign .landing-view .submit-button {
+  display: inline-flex;
+  min-width: 86px;
+  height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--vr-accent);
+  border-radius: 6px;
+  align-items: center;
+  justify-content: center;
+  background: var(--vr-accent);
+  color: white;
+  box-shadow: none;
+  font-size: 11px;
+  font-weight: 650;
+  gap: 7px;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.vreply-redesign .landing-view .submit-button:hover {
+  border-color: var(--vr-accent-hover);
+  background: var(--vr-accent-hover);
+  box-shadow: none;
+  transform: none;
+}
+
+.vreply-redesign .landing-view .submit-button svg {
+  width: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.vreply-redesign .landing-view .submit-button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.vreply-redesign .landing-view .field-error {
+  min-height: 18px;
+  margin: 6px 0 0;
+  color: var(--vr-danger);
+  font-size: 10px;
+}
+
+.vreply-redesign .reveal {
+  animation: vr-minimal-in 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.vreply-redesign .reveal-2 {
+  animation-delay: 40ms;
+}
+
+.vreply-redesign .reveal-3 {
+  animation-delay: 80ms;
+}
+
+@keyframes vr-minimal-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Workspace */
+
+.vreply-redesign.workspace-active {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.vreply-redesign.workspace-active .app-main {
+  min-height: calc(100dvh - 68px);
+}
+
+.vreply-redesign .workspace-view {
+  display: flex;
+  height: calc(100dvh - 68px);
+  padding: 10px clamp(10px, 1.4vw, 22px) 14px;
+  overflow: hidden;
+}
+
+.vreply-redesign .practice-grid,
+.vreply-redesign.workspace-active .practice-grid {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(410px, 1.55fr) minmax(250px, 1fr);
+  gap: 10px;
+}
+
+.vreply-redesign .video-panel,
+.vreply-redesign.workspace-active .video-panel {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  grid-template-areas:
+    "stage caption"
+    "controls caption";
+  grid-template-columns: minmax(0, 1fr) clamp(280px, 22vw, 350px);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 8px 10px;
+}
+
+.vreply-redesign .video-stage,
+.vreply-redesign.workspace-active .video-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--vr-line);
+  border-radius: var(--vr-radius);
+  background: #111111;
+  box-shadow: none;
+  grid-area: stage;
+}
+
+.vreply-redesign .video-stage::after,
+.vreply-redesign.workspace-active .video-stage::after {
+  background: radial-gradient(circle at 50% 50%, transparent 58%, rgba(0, 0, 0, 0.2));
+}
+
+.vreply-redesign .video-ambient,
+.vreply-redesign.workspace-active .video-ambient {
+  inset: -20px;
+  opacity: 0.15;
+  filter: blur(36px) saturate(0.6);
+}
+
+.vreply-redesign .video-mount,
+.vreply-redesign.workspace-active .video-mount {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: #111111;
+  box-shadow: none;
+}
+
+.vreply-redesign .video-mount iframe,
+.vreply-redesign .video-mount video {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+.vreply-redesign .placeholder-mark {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: white;
+}
+
+.vreply-redesign .placeholder-orbit {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.vreply-redesign .extract-overlay {
+  background: rgba(17, 17, 17, 0.88);
+}
+
+.vreply-redesign .caption-overlay {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  margin: 0;
+  padding: clamp(22px, 2.5vw, 40px);
+  overflow: hidden;
+  flex: none;
+  align-items: center;
+  border: 1px solid var(--vr-line);
+  border-radius: var(--vr-radius);
+  background: var(--vr-surface);
+  box-shadow: none;
+  color: var(--vr-ink);
+  grid-area: caption;
+  pointer-events: none;
+}
+
+.vreply-redesign .caption-overlay::before {
+  position: absolute;
+  top: 24px;
+  bottom: 24px;
+  left: 0;
+  width: 2px;
+  display: block;
+  border-radius: 0 2px 2px 0;
+  background: var(--vr-accent);
+  content: "";
+}
+
+.vreply-redesign .caption-overlay::after {
+  display: none;
+}
+
+.vreply-redesign .caption-copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+}
+
+.vreply-redesign .caption-copy p,
+.vreply-redesign #captionText {
+  margin: 0;
+  color: var(--vr-ink);
+  font-size: clamp(21px, 1.8vw, 30px);
+  font-weight: 580;
+  letter-spacing: -0.035em;
+  line-height: 1.42;
+  text-align: left;
+  text-wrap: balance;
+}
+
+.vreply-redesign .caption-overlay:not(.is-visible) .caption-copy p {
+  opacity: 1;
+  transform: none;
+}
+
+.vreply-redesign .caption-overlay:not(.is-visible) #captionText {
+  color: var(--vr-text);
+}
+
+.vreply-redesign .caption-copy .caption-translation,
+.vreply-redesign .caption-overlay:not(.is-visible) #captionTranslation {
+  padding-top: 14px;
+  border-top: 1px solid var(--vr-line);
+  color: var(--vr-muted);
+  font-size: clamp(11px, 0.9vw, 14px);
+  font-weight: 450;
+  line-height: 1.6;
+  opacity: 1;
+}
+
+.vreply-redesign .caption-overlay .caption-word {
+  color: #a1a1a0;
+}
+
+.vreply-redesign .caption-overlay .caption-word.is-spoken {
+  color: var(--vr-ink);
+}
+
+.vreply-redesign .caption-overlay .caption-word.is-current {
+  color: var(--vr-accent);
+  text-shadow: none;
+}
+
+.vreply-redesign .caption-overlay .caption-word[data-selection]:hover,
+.vreply-redesign .caption-overlay .caption-word[data-selection]:focus-visible {
+  border-radius: 2px;
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+  box-shadow: 0 0 0 2px var(--vr-accent-soft);
+  text-shadow: none;
+}
+
+.vreply-redesign .player-controls {
+  display: grid;
+  min-height: 62px;
+  padding: 7px 9px;
+  border: 1px solid var(--vr-line);
+  border-radius: var(--vr-radius);
+  background: var(--vr-surface);
+  color: var(--vr-ink);
+  box-shadow: none;
+  grid-area: controls;
+  grid-template-areas: "transport loop timeline settings";
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.vreply-redesign .transport-group,
+.vreply-redesign .settings-group {
+  gap: 3px;
+}
+
+.vreply-redesign .control-button,
+.vreply-redesign .play-button,
+.vreply-redesign .loop-button,
+.vreply-redesign .tuning-trigger,
+.vreply-redesign .analysis-trigger {
+  min-width: 42px;
+  min-height: 42px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--vr-text);
+}
+
+.vreply-redesign .play-button {
+  background: var(--vr-ink);
+  color: white;
+}
+
+.vreply-redesign .control-button:hover:not(:disabled),
+.vreply-redesign .loop-button:hover:not(:disabled),
+.vreply-redesign .tuning-trigger:hover:not(:disabled),
+.vreply-redesign .analysis-trigger:hover:not(:disabled) {
+  border: 0;
+  background: var(--vr-surface-soft);
+  color: var(--vr-ink);
+}
+
+.vreply-redesign .loop-button.is-active,
+.vreply-redesign .loop-button[aria-pressed="true"] {
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+}
+
+.vreply-redesign .timeline-group {
+  display: grid;
+  min-width: 0;
+  grid-area: timeline;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.vreply-redesign .progress-track {
+  height: 4px;
+  background: var(--vr-line);
+  box-shadow: none;
+}
+
+.vreply-redesign .progress-control:hover .progress-track,
+.vreply-redesign .progress-control:focus-within .progress-track {
+  height: 5px;
+  background: var(--vr-line-strong);
+}
+
+.vreply-redesign .progress-track i {
+  background: var(--vr-accent);
+  box-shadow: none;
+}
+
+.vreply-redesign .progress-track i::after {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--vr-surface);
+  background: var(--vr-accent);
+  box-shadow: 0 0 0 1px var(--vr-accent);
+}
+
+.vreply-redesign .time-readout {
+  min-width: 84px;
+  color: var(--vr-muted);
+  font-family: var(--vr-label);
+  font-size: 9px;
+}
+
+.vreply-redesign .time-readout b {
+  color: var(--vr-text);
+}
+
+.vreply-redesign .progress-tooltip {
+  border: 0;
+  background: var(--vr-ink);
+  color: white;
+  box-shadow: none;
+}
+
+.vreply-redesign .tuning-popover {
+  border: 1px solid var(--vr-line);
+  border-radius: var(--vr-radius);
+  background: var(--vr-surface);
+  box-shadow: 0 12px 32px rgba(25, 25, 25, 0.1);
+  color: var(--vr-ink);
+}
+
+.vreply-redesign .analysis-card {
+  z-index: 18;
+  border: 1px solid var(--vr-line);
+  border-radius: var(--vr-radius);
+  background: var(--vr-surface);
+  box-shadow: 0 18px 48px rgba(25, 25, 25, 0.12);
+  color: var(--vr-ink);
+}
+
+/* Transcript */
+
+.vreply-redesign .transcript-panel {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+  border: 1px solid var(--vr-line);
+  border-radius: var(--vr-radius);
+  background: var(--vr-surface);
+  box-shadow: none;
+  color: var(--vr-ink);
+}
+
+.vreply-redesign .transcript-header {
+  display: flex;
+  min-height: 56px;
+  padding: 0 390px 0 10px;
+  flex: 0 0 56px;
+  align-items: center;
+  border-bottom: 1px solid var(--vr-line);
+  background: var(--vr-surface);
+}
+
+.vreply-redesign .panel-tabs {
+  display: flex;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  gap: 2px;
+}
+
+.vreply-redesign .panel-tab {
+  position: relative;
+  display: inline-flex;
+  width: auto;
+  min-width: 76px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--vr-muted);
+  font-size: 10px;
+  font-weight: 550;
+  gap: 6px;
+}
+
+.vreply-redesign .panel-tab::before,
+.vreply-redesign .panel-tab::after {
+  display: none;
+}
+
+.vreply-redesign .panel-tab svg {
+  width: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.vreply-redesign .panel-tab.is-active {
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+}
+
+.vreply-redesign .panel-tab:hover:not(:disabled):not(.is-active) {
+  background: var(--vr-surface-soft);
+  color: var(--vr-text);
+}
+
+.vreply-redesign .panel-tab small,
+.vreply-redesign .panel-tab.is-active small {
+  position: static;
+  display: inline;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 8px;
+}
+
+.vreply-redesign .transcript-actions {
+  position: absolute;
+  z-index: 6;
+  top: 7px;
+  right: 8px;
+  display: flex;
+  min-height: 42px;
+  padding: 0;
+  align-items: center;
+  background: var(--vr-surface);
+  gap: 2px;
+}
+
+.vreply-redesign .transcript-tool-label {
+  display: none;
+}
+
+.vreply-redesign .follow-toggle,
+.vreply-redesign .translation-toggle {
+  min-width: 64px;
+  min-height: 38px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--vr-muted);
+}
+
+.vreply-redesign .follow-toggle:hover,
+.vreply-redesign .translation-toggle:hover,
+.vreply-redesign .follow-toggle.is-active,
+.vreply-redesign .translation-toggle.is-active {
+  border: 0;
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+}
+
+.vreply-redesign .follow-toggle > span,
+.vreply-redesign .translation-toggle > span {
+  border-color: var(--vr-line-strong);
+  background: var(--vr-line);
+}
+
+.vreply-redesign .follow-toggle.is-active > span,
+.vreply-redesign .translation-toggle.is-active > span {
+  background: var(--vr-accent);
+}
+
+.vreply-redesign .follow-toggle b,
+.vreply-redesign .translation-toggle b {
+  color: inherit;
+  font-size: 9px;
+}
+
+.vreply-redesign .icon-button {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--vr-muted);
+}
+
+.vreply-redesign .icon-button:hover:not(:disabled) {
+  border: 0;
+  background: var(--vr-surface-soft);
+  color: var(--vr-ink);
+}
+
+.vreply-redesign .search-row {
+  min-height: 44px;
+  margin: 8px 10px 0;
+  padding: 0 12px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 7px;
+  background: var(--vr-surface);
+  color: var(--vr-muted);
+}
+
+.vreply-redesign .search-row input {
+  color: var(--vr-ink);
+  font-size: 16px;
+}
+
+.vreply-redesign .search-row input::placeholder {
+  color: var(--vr-muted);
+}
+
+.vreply-redesign .search-row span {
+  color: var(--vr-accent);
+}
+
+.vreply-redesign .transcript-scroll {
+  min-height: 0;
+  padding: 0 12px 12px;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  background: var(--vr-surface);
+  scrollbar-color: var(--vr-line-strong) transparent;
+}
+
+.vreply-redesign .transcript-list {
+  display: grid;
+  align-items: start;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  column-gap: 24px;
+  row-gap: 0;
+}
+
+.vreply-redesign .transcript-item {
+  display: grid;
+  min-height: 78px;
+  padding: 13px 6px;
+  border: 0;
+  border-bottom: 1px solid var(--vr-line);
+  border-radius: 0;
+  grid-template-columns: 42px minmax(0, 1fr);
+  background: transparent;
+  box-shadow: none;
+  opacity: 1;
+  gap: 8px;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.vreply-redesign .transcript-item:hover {
+  border: 0;
+  border-bottom: 1px solid var(--vr-line);
+  background: var(--vr-surface-soft);
+  box-shadow: none;
+  opacity: 1;
+  transform: none;
+}
+
+.vreply-redesign .transcript-item.is-active {
+  border: 0;
+  border-bottom: 1px solid #cbd2f8;
+  background: var(--vr-accent-soft);
+  box-shadow: none;
+  color: var(--vr-ink);
+  opacity: 1;
+  transform: none;
+}
+
+.vreply-redesign .transcript-item.is-active::before {
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 2px;
+  display: block;
+  border-radius: 2px;
+  background: var(--vr-accent);
+}
+
+.vreply-redesign .line-time {
+  min-width: 36px;
+  height: 24px;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--vr-surface-soft);
+  color: var(--vr-muted);
+  font-family: var(--vr-label);
+  font-size: 8px;
+}
+
+.vreply-redesign .transcript-item.is-active .line-time {
+  background: var(--vr-surface);
+  color: var(--vr-accent);
+}
+
+.vreply-redesign .line-copy,
+.vreply-redesign .transcript-item.is-active .line-copy {
+  color: var(--vr-text);
+  font-size: clamp(12px, 0.84vw, 14px);
+  font-weight: 520;
+  line-height: 1.5;
+}
+
+.vreply-redesign .transcript-item.is-active .line-copy {
+  color: var(--vr-ink);
+  font-size: clamp(12.5px, 0.88vw, 14.5px);
+  font-weight: 600;
+}
+
+.vreply-redesign .line-translation,
+.vreply-redesign .transcript-item.is-active .line-translation {
+  margin-top: 5px;
+  color: var(--vr-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.vreply-redesign .line-translation:not(.is-revealed)::after,
+.vreply-redesign .transcript-item.is-active .line-translation:not(.is-revealed)::after {
+  inset: 2px auto auto 0;
+  padding: 0;
+  background: var(--vr-surface);
+  color: var(--vr-muted);
+  content: "译文";
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.vreply-redesign .line-translation:not(.is-revealed) .translation-text {
+  visibility: hidden;
+}
+
+.vreply-redesign .transcript-item.is-active .line-translation:not(.is-revealed)::after {
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+}
+
+.vreply-redesign .line-word:hover,
+.vreply-redesign .line-word:focus-visible,
+.vreply-redesign .line-word.is-range-selected,
+.vreply-redesign .transcript-item.is-active .line-word:hover,
+.vreply-redesign .transcript-item.is-active .line-word:focus-visible {
+  border-radius: 2px;
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+  box-shadow: 0 0 0 2px var(--vr-accent-soft);
+  text-shadow: none;
+}
+
+.vreply-redesign .transcript-empty {
+  color: var(--vr-muted);
+}
+
+/* Secondary views and contextual panels */
+
+.vreply-redesign .summary-view,
+.vreply-redesign .wordbook-view {
+  color: var(--vr-ink);
+  background: var(--vr-surface);
+  scrollbar-color: var(--vr-line-strong) transparent;
+}
+
+.vreply-redesign .summary-intro {
+  border-color: var(--vr-line);
+  background: var(--vr-surface-soft);
+}
+
+.vreply-redesign .summary-intro h2,
+.vreply-redesign .wordbook-heading h2 {
+  color: var(--vr-ink);
+  font-family: var(--vr-font);
+}
+
+.vreply-redesign .summary-intro p,
+.vreply-redesign .summary-point-copy span {
+  color: var(--vr-muted);
+}
+
+.vreply-redesign .summary-topics span {
+  border-color: var(--vr-line);
+  background: var(--vr-surface-soft);
+  color: var(--vr-text);
+}
+
+.vreply-redesign .summary-point {
+  border-color: var(--vr-line);
+  background: var(--vr-surface);
+}
+
+.vreply-redesign .summary-point:hover {
+  border-color: var(--vr-line-strong);
+  box-shadow: none;
+}
+
+.vreply-redesign .summary-point-copy strong {
+  color: var(--vr-ink);
+}
+
+.vreply-redesign .summary-retry {
+  border-color: var(--vr-accent);
+  background: var(--vr-accent);
+  color: white;
+}
+
+.vreply-redesign .wordbook-heading {
+  border-color: var(--vr-line);
+  background: linear-gradient(180deg, var(--vr-surface) 82%, rgba(255, 255, 255, 0));
+}
+
+.vreply-redesign .wordbook-search-trigger,
+.vreply-redesign .wordbook-pronunciations button {
+  border-color: var(--vr-line);
+  background: var(--vr-surface);
+  color: var(--vr-muted);
+}
+
+.vreply-redesign .wordbook-search-trigger:hover,
+.vreply-redesign .wordbook-search-trigger.is-active,
+.vreply-redesign .wordbook-pronunciations button:hover {
+  border-color: var(--vr-line-strong);
+  background: var(--vr-surface-soft);
+  color: var(--vr-ink);
+}
+
+.vreply-redesign .wordbook-search-row {
+  border-color: var(--vr-line-strong);
+  background: var(--vr-surface);
+  color: var(--vr-muted);
+}
+
+.vreply-redesign .wordbook-search-row input,
+.vreply-redesign .wordbook-row-copy strong,
+.vreply-redesign .wordbook-sense p,
+.vreply-redesign .wordbook-source blockquote {
+  color: var(--vr-ink);
+}
+
+.vreply-redesign .wordbook-search-row input::placeholder,
+.vreply-redesign .wordbook-row-copy > span,
+.vreply-redesign .wordbook-english-definitions small,
+.vreply-redesign .wordbook-source p,
+.vreply-redesign .wordbook-source small {
+  color: var(--vr-muted);
+}
+
+.vreply-redesign .wordbook-item,
+.vreply-redesign .wordbook-sense,
+.vreply-redesign .wordbook-source {
+  border-color: var(--vr-line);
+}
+
+.vreply-redesign .wordbook-detail,
+.vreply-redesign .wordbook-context-meaning {
+  border-color: var(--vr-line);
+  background: var(--vr-surface-soft);
+  color: var(--vr-text);
+}
+
+.vreply-redesign .dictionary-card {
+  border: 1px solid var(--vr-line);
+  border-radius: var(--vr-radius);
+  background: var(--vr-surface);
+  box-shadow: 0 18px 48px rgba(25, 25, 25, 0.12);
+  color: var(--vr-ink);
+}
+
+.vreply-redesign .dictionary-card > header {
+  border-color: var(--vr-line);
+  background: var(--vr-surface);
+}
+
+.vreply-redesign .dictionary-card strong,
+.vreply-redesign .dictionary-sense-meaning,
+.vreply-redesign .dictionary-sense-example p,
+.vreply-redesign .dictionary-detail p {
+  color: var(--vr-ink);
+}
+
+.vreply-redesign .dictionary-card header span,
+.vreply-redesign .dictionary-sense-english,
+.vreply-redesign .dictionary-sense-example small,
+.vreply-redesign .dictionary-context {
+  color: var(--vr-muted);
+}
+
+.vreply-redesign .dictionary-close,
+.vreply-redesign .dictionary-favorite,
+.vreply-redesign .dictionary-pronunciations button {
+  border-color: var(--vr-line);
+  background: var(--vr-surface);
+  color: var(--vr-muted);
+}
+
+.vreply-redesign .dictionary-close:hover,
+.vreply-redesign .dictionary-favorite:hover:not(:disabled),
+.vreply-redesign .dictionary-pronunciations button:hover {
+  border-color: var(--vr-line-strong);
+  background: var(--vr-surface-soft);
+  color: var(--vr-ink);
+}
+
+.vreply-redesign .dictionary-sense,
+.vreply-redesign .dictionary-detail {
+  border-color: var(--vr-line);
+}
+
+.vreply-redesign .dictionary-chips > span {
+  border-color: var(--vr-line);
+  background: var(--vr-surface-soft);
+  color: var(--vr-text);
+}
+
+.vreply-redesign .word-preview {
+  border: 1px solid var(--vr-line);
+  border-radius: var(--vr-radius);
+  background: var(--vr-surface);
+  box-shadow: 0 16px 42px rgba(25, 25, 25, 0.12);
+  color: var(--vr-ink);
+}
+
+.vreply-redesign .word-preview > header,
+.vreply-redesign .word-preview-senses section,
+.vreply-redesign .word-preview-forms {
+  border-color: var(--vr-line);
+}
+
+.vreply-redesign .word-preview > header strong,
+.vreply-redesign .word-preview-senses p {
+  color: var(--vr-ink);
+}
+
+.vreply-redesign .word-preview > header span,
+.vreply-redesign .word-preview-pronunciations span,
+.vreply-redesign .word-preview-senses small,
+.vreply-redesign .word-preview-forms,
+.vreply-redesign .word-preview footer {
+  color: var(--vr-muted);
+}
+
+.vreply-redesign .word-preview > header small,
+.vreply-redesign .word-preview-pronunciations b,
+.vreply-redesign .word-preview-senses span {
+  color: var(--vr-accent);
+}
+
+/* Responsive */
+
+@media (max-width: 1080px) {
+  .vreply-redesign .landing-view {
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 0.82fr);
+    gap: 54px;
+  }
+
+  .vreply-redesign .landing-view .hero-title {
+    font-size: clamp(54px, 6.4vw, 72px);
+  }
+
+  .vreply-redesign .video-panel,
+  .vreply-redesign.workspace-active .video-panel {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+
+  .vreply-redesign .transcript-header {
+    padding-right: 370px;
+  }
+}
+
+@media (max-width: 920px) {
+  .vreply-redesign:not(.workspace-active) .site-header,
+  .vreply-redesign.workspace-active .site-header {
+    height: 64px;
+    padding: 0 16px;
+  }
+
+  .vreply-redesign:not(.workspace-active) .app-main {
+    min-height: calc(100dvh - 64px);
+  }
+
+  .vreply-redesign .landing-view {
+    width: min(720px, 100%);
+    min-height: auto;
+    padding: 76px 24px 70px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 68px;
+  }
+
+  .vreply-redesign .landing-copy,
+  .vreply-redesign .landing-view .intake-column {
+    width: 100%;
+    max-width: 620px;
+    margin: 0 auto;
+  }
+
+  .vreply-redesign .landing-view .hero-title {
+    font-size: clamp(52px, 10vw, 74px);
+  }
+
+  .vreply-redesign.workspace-active {
+    height: auto;
+    min-height: 100dvh;
+    overflow-y: auto;
+  }
+
+  .vreply-redesign.workspace-active .app-main,
+  .vreply-redesign .workspace-view {
+    min-height: 0;
+    height: auto;
+  }
+
+  .vreply-redesign .workspace-view {
+    padding: 10px 10px 26px;
+    overflow: visible;
+  }
+
+  .vreply-redesign .practice-grid,
+  .vreply-redesign.workspace-active .practice-grid {
+    display: flex;
+    height: auto;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .vreply-redesign .video-panel,
+  .vreply-redesign.workspace-active .video-panel {
+    display: grid;
+    grid-template-areas:
+      "stage"
+      "controls"
+      "caption";
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(220px, auto);
+  }
+
+  .vreply-redesign .video-stage,
+  .vreply-redesign.workspace-active .video-stage {
+    min-height: 0;
+    aspect-ratio: 16 / 9;
+  }
+
+  .vreply-redesign .caption-overlay {
+    min-height: 230px;
+  }
+
+  .vreply-redesign .transcript-panel {
+    height: min(680px, 76vh);
+    min-height: 500px;
+  }
+}
+
+@media (max-width: 700px) {
+  .vreply-redesign.workspace-active .brand-name {
+    display: none;
+  }
+
+  .vreply-redesign.workspace-active .workspace-heading {
+    margin-left: 9px;
+    padding-left: 10px;
+  }
+
+  .vreply-redesign .player-controls {
+    grid-template-areas:
+      "timeline timeline"
+      "transport settings";
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+  }
+
+  .vreply-redesign .loop-button {
+    display: none;
+  }
+
+  .vreply-redesign .timeline-group {
+    grid-column: 1 / -1;
+  }
+
+  .vreply-redesign .transcript-header {
+    min-height: 54px;
+    padding: 0 8px;
+    flex: 0 0 54px;
+  }
+
+  .vreply-redesign .transcript-actions {
+    position: static;
+    min-height: 48px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--vr-line);
+    flex: 0 0 48px;
+    justify-content: flex-end;
+  }
+
+  .vreply-redesign .transcript-list {
+    grid-template-columns: minmax(0, 1fr);
+    column-gap: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .vreply-redesign:not(.workspace-active) .site-header,
+  .vreply-redesign.workspace-active .site-header {
+    height: 60px;
+    padding: 0 10px;
+  }
+
+  .vreply-redesign .brand-mark,
+  .vreply-redesign:not(.workspace-active) .brand-mark {
+    width: 30px;
+    height: 30px;
+  }
+
+  .vreply-redesign .brand-name,
+  .vreply-redesign:not(.workspace-active) .brand-name {
+    font-size: 16px;
+  }
+
+  .vreply-redesign .quiet-button,
+  .vreply-redesign:not(.workspace-active) .quiet-button {
+    min-width: 40px;
+    padding: 0 9px;
+  }
+
+  .vreply-redesign #aiSettingsButton,
+  .vreply-redesign.workspace-active #newVideoButton {
+    font-size: 0;
+  }
+
+  .vreply-redesign #aiSettingsButton svg,
+  .vreply-redesign.workspace-active #newVideoButton svg {
+    width: 17px;
+  }
+
+  .vreply-redesign.workspace-active #learningTimeButton {
+    display: none;
+  }
+
+  .vreply-redesign.workspace-active .workspace-heading h1 {
+    max-width: 48vw;
+    font-size: 10px;
+  }
+
+  .vreply-redesign .landing-view {
+    padding: 64px 18px 54px;
+    gap: 54px;
+  }
+
+  .vreply-redesign .landing-view .eyebrow {
+    margin-bottom: 18px;
+    font-size: 9px;
+  }
+
+  .vreply-redesign .landing-view .hero-title {
+    font-size: clamp(46px, 13vw, 62px);
+    line-height: 1.06;
+  }
+
+  .vreply-redesign .landing-view .hero-description {
+    margin-top: 24px;
+    font-size: 14px;
+  }
+
+  .vreply-redesign .landing-view .intake-card {
+    padding-top: 20px;
+  }
+
+  .vreply-redesign .landing-view .url-field {
+    min-height: 54px;
+    padding-left: 12px;
+  }
+
+  .vreply-redesign .landing-view .submit-button,
+  .vreply-redesign .landing-view .submit-button span {
+    display: inline-flex;
+  }
+
+  .vreply-redesign .landing-view .submit-button {
+    width: auto;
+    min-width: 76px;
+  }
+
+  .vreply-redesign .caption-overlay {
+    min-height: 150px;
+    padding: 22px;
+  }
+
+  .vreply-redesign .caption-copy p,
+  .vreply-redesign #captionText {
+    font-size: clamp(18px, 5.6vw, 23px);
+  }
+
+  .vreply-redesign .video-panel,
+  .vreply-redesign.workspace-active .video-panel {
+    grid-template-rows: auto auto minmax(150px, auto);
+  }
+
+  .vreply-redesign .player-controls {
+    padding: 7px;
+  }
+
+  .vreply-redesign .control-button,
+  .vreply-redesign .play-button,
+  .vreply-redesign .tuning-trigger,
+  .vreply-redesign .analysis-trigger {
+    min-width: 40px;
+    width: 40px;
+  }
+
+  .vreply-redesign .panel-tabs {
+    width: 100%;
+  }
+
+  .vreply-redesign .panel-tab {
+    min-width: 0;
+    flex: 1 1 0;
+  }
+
+  .vreply-redesign .transcript-actions {
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+
+  .vreply-redesign .transcript-scroll {
+    padding: 0 10px 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vreply-redesign .reveal {
+    animation: none;
+  }
+
+  .vreply-redesign .landing-copy,
+  .vreply-redesign .transcript-item {
+    transition-duration: 1ms !important;
+    transform: none !important;
+  }
+}

@@ -9,7 +9,11 @@
   const SUBTITLE_STYLE_KEY = "vreply:subtitle-style";
   const SAVED_WORDS_KEY = "vreply:saved-words:v1";
   const LEARNING_TIME_KEY = "vreply:learning-time:v1";
+  const LAST_SESSION_KEY = "vreply:last-session";
   const LEARNING_TIME_FLUSH_MS = 5000;
+  const PLAYBACK_SESSION_FLUSH_MS = 5000;
+  const RESUME_MIN_TIME = 5;
+  const RESUME_END_THRESHOLD = 10;
   const KEYBOARD_REWIND_START_WINDOW = 0.8;
   const HOVER_LOOKUP_DELAY_MS = 180;
   const WORD_SEGMENTERS = new Map();
@@ -476,6 +480,7 @@
     summaryLoading: false,
     summaryTranscriptId: null,
     keyboardRewindIndex: null,
+    pendingResumeTime: 0,
   };
 
   let youTubeApiPromise = null;
@@ -727,7 +732,9 @@
     });
   }
 
-  async function startImport(rawUrl) {
+  async function startImport(rawUrl, options) {
+    const config = options || {};
+    const requestedResumeTime = Math.max(0, Number(config.resumeTime) || 0);
     const source = parseVideoUrl(rawUrl);
     if (source.error) {
       showFieldError(source.error);
@@ -758,6 +765,7 @@
     state.activeTranscriptNode = null;
     state.activeIndex = -1;
     state.currentTime = 0;
+    state.pendingResumeTime = requestedResumeTime;
     state.duration = DEFAULT_DURATION;
     state.lastCaptionWord = -1;
     state.transcriptId = null;
@@ -891,13 +899,18 @@
     setInteractiveReady(true);
     renderTranscript("");
     resetSummaryView();
-    updatePlaybackUI(0, true);
+    const resumeTime = resumablePlaybackTime(state.pendingResumeTime, state.duration);
+    state.pendingResumeTime = 0;
+    seekTo(resumeTime, { play: false });
 
     elements.extractTitle.textContent = "字幕已准备好。";
     elements.extractDetail.textContent = `现在可以逐句听、循环练，跟着${sourceLanguage.nameZh}字幕开口了。`;
     elements.extractProgress.style.width = "100%";
     await delay(170);
     elements.extractOverlay.classList.add("is-complete");
+    if (resumeTime > 0) {
+      showToast("已恢复上次进度", `已定位到 ${formatTime(resumeTime)}，可以从这里继续。`);
+    }
     saveSession();
   }
 
@@ -1053,6 +1066,9 @@
         if (token !== state.loadToken) return;
         state.playerReady = true;
         state.duration = Number.isFinite(video.duration) ? video.duration : state.duration;
+        if (state.currentTime > 0) {
+          video.currentTime = Math.min(state.currentTime, state.duration);
+        }
         elements.videoPlaceholder.classList.add("is-hidden");
         updatePlaybackUI(state.currentTime, true);
       });
@@ -1096,6 +1112,9 @@
               event.target.setPlaybackRate(state.speed);
               event.target.setVolume(state.volume);
               disableYouTubeCaptions(event.target);
+              if (state.currentTime > 0) {
+                event.target.seekTo(Math.min(state.currentTime, state.duration), true);
+              }
               elements.videoPlaceholder.classList.add("is-hidden");
               updatePlaybackUI(state.currentTime, true);
             },
@@ -1208,12 +1227,14 @@
   }
 
   function setPlaying(playing) {
+    const wasPlaying = state.playing;
     state.playing = Boolean(playing);
     if (state.playing) startPlaybackTicker();
     else stopPlaybackTicker();
     elements.playButton.classList.toggle("is-playing", state.playing);
     elements.playButton.setAttribute("aria-label", state.playing ? "暂停视频" : "播放视频");
     elements.playButton.dataset.controlTooltip = state.playing ? "暂停" : "播放";
+    if (wasPlaying && !state.playing) saveSession();
   }
 
   function startPlaybackTicker() {
@@ -3515,6 +3536,7 @@
   }
 
   function returnHome() {
+    clearSession();
     ++state.loadToken;
     setPlaying(false);
     cleanupPlayer();
@@ -3528,6 +3550,7 @@
     state.activeTranscriptNode = null;
     state.transcriptId = null;
     state.activeIndex = -1;
+    state.pendingResumeTime = 0;
     state.showTranslations = false;
     state.revealedTranslations.clear();
     state.translations.clear();
@@ -3603,14 +3626,86 @@
     state.toastTimer = setTimeout(() => elements.toast.classList.remove("is-visible"), 3200);
   }
 
+  function currentPlayerTime() {
+    let currentTime = state.currentTime;
+    try {
+      if (state.playerKind === "youtube" && state.playerReady && state.ytPlayer) {
+        currentTime = Number(state.ytPlayer.getCurrentTime());
+      } else if (state.playerKind === "direct" && state.playerReady && state.directPlayer) {
+        currentTime = Number(state.directPlayer.currentTime);
+      }
+    } catch (_error) {
+      // Keep the latest timeline value while the player is changing state.
+    }
+    if (Number.isFinite(currentTime) && currentTime >= 0) {
+      state.currentTime = currentTime;
+    }
+    return state.currentTime;
+  }
+
+  function resumablePlaybackTime(value, duration) {
+    const currentTime = Math.max(0, Number(value) || 0);
+    const fullDuration = Math.max(0, Number(duration) || 0);
+    if (currentTime < RESUME_MIN_TIME) return 0;
+    if (fullDuration > 0 && fullDuration - currentTime <= RESUME_END_THRESHOLD) return 0;
+    return fullDuration > 0 ? Math.min(currentTime, fullDuration) : currentTime;
+  }
+
+  function readSession() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(LAST_SESSION_KEY) || "null");
+      if (!saved || typeof saved !== "object" || typeof saved.url !== "string") return null;
+      const source = parseVideoUrl(saved.url);
+      if (source.error) return null;
+      return {
+        url: source.url,
+        learningLanguage: LEARNING_LANGUAGES[saved.learningLanguage] ? saved.learningLanguage : "en",
+        currentTime: Math.max(0, Number(saved.currentTime) || 0),
+      };
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function restoreSession() {
+    const session = readSession();
+    if (!session) return false;
+    state.learningLanguage = session.learningLanguage;
+    state.pronunciationAccent = initialPronunciationAccent(session.learningLanguage);
+    try {
+      localStorage.setItem(LEARNING_LANGUAGE_KEY, session.learningLanguage);
+    } catch (_error) {
+      // The restored language still applies for the current session.
+    }
+    syncLearningLanguageUi();
+    elements.videoUrl.value = session.url;
+    startImport(session.url, { resumeTime: session.currentTime });
+    return true;
+  }
+
+  function clearSession() {
+    try {
+      localStorage.removeItem(LAST_SESSION_KEY);
+    } catch (_error) {
+      // Local storage can be unavailable in privacy-focused browsing modes.
+    }
+  }
+
   function saveSession() {
+    if (!state.source || !state.source.url) return;
+    const duration = Math.max(0, Number(state.duration) || 0);
+    const currentTime = state.interactiveReady
+      ? resumablePlaybackTime(currentPlayerTime(), duration)
+      : Math.max(0, Number(state.pendingResumeTime) || Number(state.currentTime) || 0);
     try {
       localStorage.setItem(
-        "vreply:last-session",
+        LAST_SESSION_KEY,
         JSON.stringify({
           url: state.source.url,
           title: elements.projectTitle.textContent,
           learningLanguage: state.learningLanguage,
+          currentTime,
+          duration,
           savedAt: Date.now(),
         })
       );
@@ -4058,10 +4153,16 @@
   });
   window.addEventListener("focus", syncLearningTimeTracking);
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) clearHoverLookup();
+    if (document.hidden) {
+      clearHoverLookup();
+      saveSession();
+    }
     syncLearningTimeTracking();
   });
-  window.addEventListener("pagehide", flushLearningTime);
+  window.addEventListener("pagehide", () => {
+    flushLearningTime();
+    saveSession();
+  });
   elements.workspaceView.addEventListener("focusin", (event) => {
     const word = subtitleLookupTarget(event.target);
     if (word) scheduleWordPreview(word);
@@ -4101,6 +4202,7 @@
   renderSavedWords();
   syncLearningTimeTracking();
   window.setInterval(flushLearningTime, LEARNING_TIME_FLUSH_MS);
+  window.setInterval(saveSession, PLAYBACK_SESSION_FLUSH_MS);
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !elements.learningTimePanel.classList.contains("is-hidden")) {
@@ -4165,4 +4267,5 @@
   detectChromeTranslationAvailability();
   loadLanguageCapabilities();
   updatePlaybackUI(0, true);
+  restoreSession();
 })();
