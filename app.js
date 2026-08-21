@@ -10,13 +10,30 @@
   const SAVED_WORDS_KEY = "vreply:saved-words:v1";
   const LEARNING_TIME_KEY = "vreply:learning-time:v1";
   const LAST_SESSION_KEY = "vreply:last-session";
+  const PRACTICE_MODE_KEY = "vreply:practice-mode:v1";
+  const SHADOW_SETTINGS_KEY = "vreply:shadow-settings:v1";
+  const SHADOW_HEADPHONE_HINT_KEY = "vreply:shadow-headphone-hint:v1";
   const LEARNING_TIME_FLUSH_MS = 5000;
   const PLAYBACK_SESSION_FLUSH_MS = 5000;
   const RESUME_MIN_TIME = 5;
   const RESUME_END_THRESHOLD = 10;
   const KEYBOARD_REWIND_START_WINDOW = 0.8;
   const HOVER_LOOKUP_DELAY_MS = 180;
+  const SHADOW_SAMPLE_INTERVAL_MS = 50;
+  const SHADOW_SILENCE_WARNING_MS = 1800;
+  const SHADOW_VOICE_RMS_THRESHOLD = 0.012;
+  const SHADOW_REDUCED_VOLUME = 24;
   const WORD_SEGMENTERS = new Map();
+  const SHADOW_VARIANTS = new Set(["sentence", "assist", "delayed", "blind"]);
+  const SHADOW_WEAK_WORDS = new Set([
+    "a", "an", "and", "are", "as", "at", "be", "been", "but", "by", "can", "could",
+    "do", "does", "for", "from", "had", "has", "have", "he", "her", "him", "his", "i",
+    "if", "in", "is", "it", "me", "my", "of", "on", "or", "our", "she", "so", "than",
+    "that", "the", "their", "them", "there", "they", "this", "to", "us", "was", "we",
+    "were", "will", "with", "would", "you", "your",
+    "al", "de", "del", "el", "en", "es", "la", "las", "los", "o", "para", "por", "que",
+    "se", "su", "un", "una", "y",
+  ]);
   const DEFAULT_SUBTITLE_STYLE = Object.freeze({
     scale: 100,
     originalFont: "inter",
@@ -50,9 +67,7 @@
       locale: "en",
       nameZh: "英语",
       translationPair: "中英",
-      heroEyebrow: "Video to voice",
       heroPrimary: "Turn a YouTube video into a focused English speaking room.",
-      heroSecondary: "Paste, listen, repeat — the transcript keeps your place.",
       subtitlePreview: "Speak clearly, stay curious.",
       accents: Object.freeze([
         Object.freeze({ value: "en-US", badge: "US", short: "美", label: "美式发音" }),
@@ -64,9 +79,7 @@
       locale: "es",
       nameZh: "西班牙语",
       translationPair: "中西",
-      heroEyebrow: "Vídeo a voz · Español",
       heroPrimary: "Turn a YouTube video into a focused Spanish speaking room.",
-      heroSecondary: "Pega, escucha, repite — every line stays in step.",
       subtitlePreview: "Habla con claridad, mantén la curiosidad.",
       accents: Object.freeze([
         Object.freeze({ value: "es-ES", badge: "ES", short: "西", label: "西班牙发音" }),
@@ -158,6 +171,41 @@
     return "Translator" in self ? "chrome" : "api";
   }
 
+  function initialPracticeMode() {
+    try {
+      return localStorage.getItem(PRACTICE_MODE_KEY) === "shadow" ? "shadow" : "listen";
+    } catch (_error) {
+      return "listen";
+    }
+  }
+
+  function initialShadowSettings() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SHADOW_SETTINGS_KEY) || "null");
+      const variant = saved && SHADOW_VARIANTS.has(saved.variant) ? saved.variant : "sentence";
+      const parsedDelay = saved && saved.delay !== null && saved.delay !== ""
+        ? Number(saved.delay)
+        : Number.NaN;
+      const delay = Number.isFinite(parsedDelay)
+        ? Math.max(0, Math.min(3, parsedDelay))
+        : 0.8;
+      const microphoneId = saved && typeof saved.microphoneId === "string"
+        ? saved.microphoneId.slice(0, 512)
+        : "";
+      return { variant, delay, microphoneId };
+    } catch (_error) {
+      return { variant: "sentence", delay: 0.8, microphoneId: "" };
+    }
+  }
+
+  function initialShadowHeadphoneHintDismissed() {
+    try {
+      return localStorage.getItem(SHADOW_HEADPHONE_HINT_KEY) === "dismissed";
+    } catch (_error) {
+      return false;
+    }
+  }
+
   function initialPronunciationAccent(languageCode) {
     const language = LEARNING_LANGUAGES[languageCode] || LEARNING_LANGUAGES.en;
     const supported = language.accents.map((accent) => accent.value);
@@ -171,6 +219,7 @@
   }
 
   const INITIAL_LEARNING_LANGUAGE = initialLearningLanguage();
+  const INITIAL_SHADOW_SETTINGS = initialShadowSettings();
 
   function initialSubtitleStyle() {
     try {
@@ -230,6 +279,10 @@
   const elements = {
     landingView: document.getElementById("landingView"),
     workspaceView: document.getElementById("workspaceView"),
+    practiceModeSwitcher: document.getElementById("practiceModeSwitcher"),
+    practiceModeLabel: document.getElementById("practiceModeLabel"),
+    listeningModeButton: document.getElementById("listeningModeButton"),
+    shadowModeButton: document.getElementById("shadowModeButton"),
     brandButton: document.getElementById("brandButton"),
     newVideoButton: document.getElementById("newVideoButton"),
     learningTimeButton: document.getElementById("learningTimeButton"),
@@ -270,9 +323,7 @@
     subtitlePreviewTranslation: document.getElementById("subtitlePreviewTranslation"),
     learningLanguagePicker: document.getElementById("learningLanguagePicker"),
     learningLanguageInputs: Array.from(document.querySelectorAll('input[name="learningLanguage"]')),
-    heroEyebrow: document.getElementById("heroEyebrow"),
     heroDescriptionPrimary: document.getElementById("heroDescriptionPrimary"),
-    heroDescriptionSecondary: document.getElementById("heroDescriptionSecondary"),
     translationEngineChrome: document.getElementById("translationEngineChrome"),
     translationEngineApi: document.getElementById("translationEngineApi"),
     pronunciationAccentUs: document.getElementById("pronunciationAccentUs"),
@@ -332,6 +383,52 @@
     analysisReading: document.getElementById("analysisReading"),
     loopButton: document.getElementById("loopButton"),
     transcriptPanel: document.getElementById("transcriptPanel"),
+    shadowCoachPanel: document.getElementById("shadowCoachPanel"),
+    shadowSentencePosition: document.getElementById("shadowSentencePosition"),
+    shadowPhaseLabel: document.getElementById("shadowPhaseLabel"),
+    shadowVariantPicker: document.getElementById("shadowVariantPicker"),
+    shadowVariantCurrentName: document.getElementById("shadowVariantCurrentName"),
+    shadowVariantCurrentDescription: document.getElementById("shadowVariantCurrentDescription"),
+    shadowVariants: Array.from(document.querySelectorAll("[data-shadow-variant]")),
+    shadowDelaySettings: document.getElementById("shadowDelaySettings"),
+    shadowDelaySelect: document.getElementById("shadowDelaySelect"),
+    shadowDelayHint: document.getElementById("shadowDelayHint"),
+    shadowCustomDelayWrap: document.getElementById("shadowCustomDelayWrap"),
+    shadowCustomDelay: document.getElementById("shadowCustomDelay"),
+    shadowHeadphoneNote: document.getElementById("shadowHeadphoneNote"),
+    shadowHeadphoneDismiss: document.getElementById("shadowHeadphoneDismiss"),
+    shadowPromptKicker: document.getElementById("shadowPromptKicker"),
+    shadowPromptText: document.getElementById("shadowPromptText"),
+    shadowBlindPlaceholder: document.getElementById("shadowBlindPlaceholder"),
+    shadowRhythmGuide: document.getElementById("shadowRhythmGuide"),
+    shadowSteps: Array.from(document.querySelectorAll("[data-shadow-step]")),
+    shadowReferenceButton: document.getElementById("shadowReferenceButton"),
+    shadowReferenceDuration: document.getElementById("shadowReferenceDuration"),
+    shadowRecordButton: document.getElementById("shadowRecordButton"),
+    shadowRecordLabel: document.getElementById("shadowRecordLabel"),
+    shadowMicrophoneSelect: document.getElementById("shadowMicrophoneSelect"),
+    shadowInputMeter: document.getElementById("shadowInputMeter"),
+    shadowRecordingTimer: document.getElementById("shadowRecordingTimer"),
+    shadowLiveTranscript: document.getElementById("shadowLiveTranscript"),
+    shadowAudioCompare: document.getElementById("shadowAudioCompare"),
+    shadowOriginalAudioButton: document.getElementById("shadowOriginalAudioButton"),
+    shadowOriginalAudioMeta: document.getElementById("shadowOriginalAudioMeta"),
+    shadowUserAudio: document.getElementById("shadowUserAudio"),
+    shadowResults: document.getElementById("shadowResults"),
+    shadowOverallScore: document.getElementById("shadowOverallScore"),
+    shadowOverallValue: document.getElementById("shadowOverallValue"),
+    shadowContentScore: document.getElementById("shadowContentScore"),
+    shadowFluencyScore: document.getElementById("shadowFluencyScore"),
+    shadowRhythmScore: document.getElementById("shadowRhythmScore"),
+    shadowResultSummary: document.getElementById("shadowResultSummary"),
+    shadowWordResults: document.getElementById("shadowWordResults"),
+    shadowRecognizedText: document.getElementById("shadowRecognizedText"),
+    shadowWpm: document.getElementById("shadowWpm"),
+    shadowPauseCount: document.getElementById("shadowPauseCount"),
+    shadowWer: document.getElementById("shadowWer"),
+    shadowLeakStatus: document.getElementById("shadowLeakStatus"),
+    shadowRetryButton: document.getElementById("shadowRetryButton"),
+    shadowNextButton: document.getElementById("shadowNextButton"),
     transcriptCount: document.getElementById("transcriptCount"),
     transcriptScroll: document.getElementById("transcriptScroll"),
     transcriptSkeleton: document.getElementById("transcriptSkeleton"),
@@ -406,6 +503,19 @@
 
   const state = {
     learningLanguage: INITIAL_LEARNING_LANGUAGE,
+    practiceMode: initialPracticeMode(),
+    shadowVariant: INITIAL_SHADOW_SETTINGS.variant,
+    shadowDelay: INITIAL_SHADOW_SETTINGS.delay,
+    shadowMicrophoneId: INITIAL_SHADOW_SETTINGS.microphoneId,
+    shadowPhase: "idle",
+    shadowRoundIndex: 0,
+    shadowReferenceEndTime: 0,
+    shadowReferenceReturnPhase: null,
+    shadowPlaybackWatchdog: null,
+    shadowCapture: null,
+    shadowTimerFrame: null,
+    shadowAudioUrl: null,
+    shadowResult: null,
     source: null,
     transcript: [],
     transcriptNodes: [],
@@ -575,9 +685,7 @@
     elements.learningLanguageInputs.forEach((input) => {
       input.checked = input.value === language.code;
     });
-    elements.heroEyebrow.textContent = language.heroEyebrow;
     elements.heroDescriptionPrimary.textContent = language.heroPrimary;
-    elements.heroDescriptionSecondary.textContent = language.heroSecondary;
     elements.videoUrl.placeholder = "粘贴 YouTube 链接";
     elements.subtitlePreviewOriginal.textContent = language.subtitlePreview;
     if (!state.source) elements.projectTitle.textContent = `日常${language.nameZh}练习`;
@@ -760,6 +868,14 @@
     if (!document.body.classList.contains("door-opening")) return;
 
     state.source = source;
+    discardShadowCapture();
+    clearShadowPlaybackWatchdog();
+    clearShadowAudio();
+    state.shadowResult = null;
+    state.shadowPhase = "idle";
+    state.shadowRoundIndex = 0;
+    state.shadowReferenceEndTime = 0;
+    state.shadowReferenceReturnPhase = null;
     state.transcript = [];
     state.transcriptNodes = [];
     state.activeTranscriptNode = null;
@@ -827,6 +943,7 @@
     elements.extractProgress.style.width = "10%";
     elements.workspaceView.setAttribute("aria-busy", "true");
     setInteractiveReady(false);
+    syncPracticeModeUi();
 
     elements.projectTitle.textContent = `${sourceLanguage.nameZh} · 已导入的视频`;
     elements.transcriptCount.textContent = "0";
@@ -902,6 +1019,11 @@
     const resumeTime = resumablePlaybackTime(state.pendingResumeTime, state.duration);
     state.pendingResumeTime = 0;
     seekTo(resumeTime, { play: false });
+    if (state.practiceMode === "shadow") {
+      resetShadowRound({ index: state.activeIndex >= 0 ? state.activeIndex : 0, seek: false });
+    } else {
+      renderShadowUi();
+    }
 
     elements.extractTitle.textContent = "字幕已准备好。";
     elements.extractDetail.textContent = `现在可以逐句听、循环练，跟着${sourceLanguage.nameZh}字幕开口了。`;
@@ -1022,10 +1144,13 @@
       elements.summaryTab,
       elements.searchButton,
       elements.downloadButton,
+      elements.listeningModeButton,
+      elements.shadowModeButton,
     ].forEach((control) => {
       control.disabled = !ready;
     });
     updateTranslationToggle();
+    renderShadowUi();
   }
 
   function showTranscriptionFailure(error) {
@@ -1344,6 +1469,16 @@
       current += elapsed * state.speed;
     }
 
+    if (
+      state.practiceMode === "shadow"
+      && (state.shadowPhase === "playing-reference" || state.shadowPhase === "replaying-result")
+      && state.shadowReferenceEndTime > 0
+      && current >= state.shadowReferenceEndTime - 0.04
+    ) {
+      completeShadowReference();
+      return;
+    }
+
     if (state.loopLine && state.playing && state.activeIndex >= 0) {
       const activeSegment = state.transcript[state.activeIndex];
       if (activeSegment && current >= activeSegment.end - 0.04) {
@@ -1358,6 +1493,9 @@
         state.ytPlayer.pauseVideo();
       }
       setPlaying(false);
+      if (state.practiceMode === "shadow" && state.shadowPhase === "recording") {
+        void stopShadowRecording();
+      }
     }
 
     state.currentTime = current;
@@ -1378,6 +1516,7 @@
     const nextIndex = findActiveSegment(time);
     if (force || nextIndex !== state.activeIndex) setActiveSegment(nextIndex);
     updateCaptionWord(time);
+    updateShadowCue(time);
   }
 
   function updateProgressTooltip(time, progress) {
@@ -1439,6 +1578,22 @@
     elements.captionOverlay.classList.add("is-visible");
     renderCaptionWords(segment);
     updateCaptionTranslation(index);
+    if (
+      state.practiceMode === "shadow"
+      && state.shadowPhase === "recording"
+      && state.shadowVariant === "delayed"
+    ) {
+      renderShadowPrompt(index);
+      updateShadowRoundPosition(index);
+    } else if (
+      state.practiceMode === "shadow"
+      && ["idle", "ready-record"].includes(state.shadowPhase)
+      && index !== state.shadowRoundIndex
+    ) {
+      state.shadowRoundIndex = index;
+      renderShadowPrompt(index);
+      updateShadowRoundPosition(index);
+    }
   }
 
   function keepActiveTranscriptInView(item) {
@@ -1595,6 +1750,9 @@
     resetKeyboardRewindChain();
     const currentIndex = currentSentenceIndex();
     const targetIndex = Math.max(0, Math.min(state.transcript.length - 1, currentIndex + direction));
+    if (state.practiceMode === "shadow" && state.shadowPhase !== "recording") {
+      resetShadowRound({ index: targetIndex, seek: false });
+    }
     seekTo(state.transcript[targetIndex].start, { play: state.playing });
   }
 
@@ -3356,12 +3514,1505 @@
     state.volume = Math.max(0, Math.min(100, Number(value) || 0));
     elements.volumeValue.value = `${state.volume}%`;
     elements.volumeRange.style.setProperty("--fill", `${state.volume}%`);
+    const appliedVolume = state.practiceMode === "shadow"
+      && state.shadowVariant === "delayed"
+      && state.shadowPhase === "recording"
+      ? Math.min(state.volume, SHADOW_REDUCED_VOLUME)
+      : state.volume;
+    applyPlayerVolume(appliedVolume);
+  }
+
+  function applyPlayerVolume(value) {
+    const volume = Math.max(0, Math.min(100, Number(value) || 0));
     if (state.playerKind === "youtube" && state.playerReady && state.ytPlayer) {
-      state.ytPlayer.setVolume(state.volume);
+      state.ytPlayer.setVolume(volume);
     }
     if (state.playerKind === "direct" && state.directPlayer) {
-      state.directPlayer.volume = state.volume / 100;
+      state.directPlayer.volume = volume / 100;
     }
+  }
+
+  function persistPracticeMode() {
+    try {
+      localStorage.setItem(PRACTICE_MODE_KEY, state.practiceMode);
+    } catch (_error) {
+      // Practice mode still works when storage is unavailable.
+    }
+  }
+
+  function persistShadowSettings() {
+    try {
+      localStorage.setItem(SHADOW_SETTINGS_KEY, JSON.stringify({
+        variant: state.shadowVariant,
+        delay: state.shadowDelay,
+        microphoneId: state.shadowMicrophoneId,
+      }));
+    } catch (_error) {
+      // Shadowing settings remain available for this page session.
+    }
+  }
+
+  function shadowMicrophoneName(device, index) {
+    const label = String(device?.label || "")
+      .replace(/^(default|communications|默认|通信)\s*[-–—:]\s*/i, "")
+      .trim();
+    return label || `麦克风 ${index + 1}`;
+  }
+
+  function shadowMicrophoneIsVirtual(label) {
+    return /virtual|todesk|vb-?audio|voicemeeter|stereo mix|cable input|虚拟|立体声混音/i
+      .test(String(label || ""));
+  }
+
+  async function refreshShadowMicrophones() {
+    const select = elements.shadowMicrophoneSelect;
+    if (!select) return;
+    const canEnumerate = Boolean(
+      navigator.mediaDevices
+      && typeof navigator.mediaDevices.enumerateDevices === "function"
+    );
+    select.dataset.available = String(canEnumerate);
+    if (!canEnumerate) {
+      select.replaceChildren(new Option("浏览器无法读取麦克风", ""));
+      renderShadowUi();
+      return;
+    }
+
+    try {
+      const devices = (await navigator.mediaDevices.enumerateDevices())
+        .filter((device) => device.kind === "audioinput");
+      const defaultDevice = devices.find((device) => device.deviceId === "default");
+      const concreteDevices = devices.filter(
+        (device) => device.deviceId && !["default", "communications"].includes(device.deviceId),
+      );
+      const fragment = document.createDocumentFragment();
+      const defaultOption = new Option(
+        defaultDevice?.label
+          ? `系统默认 · ${shadowMicrophoneName(defaultDevice, 0)}`
+          : "系统默认麦克风",
+        "",
+      );
+      fragment.appendChild(defaultOption);
+      concreteDevices.forEach((device, index) => {
+        fragment.appendChild(new Option(shadowMicrophoneName(device, index), device.deviceId));
+      });
+
+      const selectedAvailable = concreteDevices.some(
+        (device) => device.deviceId === state.shadowMicrophoneId,
+      );
+      const labelsAvailable = devices.some((device) => String(device.label || "").trim());
+      if (state.shadowMicrophoneId && !selectedAvailable && !labelsAvailable) {
+        fragment.appendChild(new Option("上次使用的麦克风", state.shadowMicrophoneId));
+      } else if (state.shadowMicrophoneId && !selectedAvailable) {
+        state.shadowMicrophoneId = "";
+        persistShadowSettings();
+      }
+      select.replaceChildren(fragment);
+      select.value = state.shadowMicrophoneId;
+    } catch (_error) {
+      select.replaceChildren(new Option("系统默认麦克风", ""));
+      select.value = "";
+    }
+    renderShadowUi();
+  }
+
+  function setShadowMicrophone(value) {
+    if (state.shadowCapture) return;
+    state.shadowMicrophoneId = String(value || "").slice(0, 512);
+    persistShadowSettings();
+  }
+
+  function clearShadowAudio() {
+    if (state.shadowAudioUrl) URL.revokeObjectURL(state.shadowAudioUrl);
+    state.shadowAudioUrl = null;
+    elements.shadowUserAudio.removeAttribute("src");
+    elements.shadowUserAudio.load();
+  }
+
+  function syncPracticeModeUi() {
+    const shadowing = state.practiceMode === "shadow";
+    document.body.classList.toggle("shadow-mode-active", shadowing);
+    elements.listeningModeButton.classList.toggle("is-active", !shadowing);
+    elements.listeningModeButton.setAttribute("aria-pressed", String(!shadowing));
+    elements.shadowModeButton.classList.toggle("is-active", shadowing);
+    elements.shadowModeButton.setAttribute("aria-pressed", String(shadowing));
+    elements.transcriptPanel.classList.toggle("is-hidden", shadowing);
+    elements.shadowCoachPanel.classList.toggle("is-hidden", !shadowing);
+    elements.practiceModeLabel.textContent = shadowing ? "影子跟读" : "整体倾听";
+    elements.practiceModeSwitcher.querySelector("summary").setAttribute(
+      "aria-label",
+      `切换练习模式，当前：${shadowing ? "影子跟读" : "整体倾听"}`,
+    );
+    if (!shadowing) document.body.classList.remove("shadow-blind-active");
+    renderShadowUi();
+  }
+
+  function setPracticeMode(mode, options) {
+    const config = options || {};
+    const nextMode = mode === "shadow" ? "shadow" : "listen";
+    elements.practiceModeSwitcher.open = false;
+    if (state.practiceMode === nextMode && !config.force) return;
+    if (state.shadowCapture) discardShadowCapture();
+    clearShadowPlaybackWatchdog();
+    if (["playing-reference", "replaying-result", "recording"].includes(state.shadowPhase)) {
+      pausePlayback();
+    }
+    if (nextMode === "listen") state.shadowPhase = "idle";
+    state.practiceMode = nextMode;
+    persistPracticeMode();
+    closeDictionary({ resume: false });
+    closeSentenceAnalysis({ resume: false });
+    syncPracticeModeUi();
+    if (nextMode === "shadow" && state.transcript.length) {
+      const index = state.activeIndex >= 0 ? state.activeIndex : 0;
+      resetShadowRound({ index, seek: state.activeIndex < 0 });
+    }
+    if (nextMode === "shadow") void refreshShadowMicrophones();
+  }
+
+  function shadowDelayDescription() {
+    if (state.shadowDelay === 0) return "0 秒 · 与说话者同步开口";
+    if (state.shadowDelay <= 0.5) return `${state.shadowDelay.toFixed(1)} 秒 · 高阶紧跟`;
+    if (state.shadowDelay >= 1.2) return `${state.shadowDelay.toFixed(1)} 秒 · 留出听辨空间`;
+    return `${state.shadowDelay.toFixed(1)} 秒 · 听清后紧跟说话者`;
+  }
+
+  function setShadowVariant(variant) {
+    elements.shadowVariantPicker.open = false;
+    if (!SHADOW_VARIANTS.has(variant) || state.shadowVariant === variant) return;
+    state.shadowVariant = variant;
+    persistShadowSettings();
+    const index = state.activeIndex >= 0 ? state.activeIndex : state.shadowRoundIndex;
+    resetShadowRound({ index, seek: false });
+  }
+
+  function setShadowDelay(value) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+    state.shadowDelay = Math.max(0, Math.min(3, Math.round(parsed * 10) / 10));
+    elements.shadowCustomDelay.value = String(state.shadowDelay);
+    persistShadowSettings();
+    renderShadowUi();
+  }
+
+  function discardShadowCapture() {
+    const capture = state.shadowCapture;
+    if (!capture) return;
+    capture.discard = true;
+    if (capture.recognition) {
+      try {
+        capture.recognition.abort();
+      } catch (_error) {
+        // Recognition may already have ended.
+      }
+    }
+    if (capture.recorder && capture.recorder.state !== "inactive") {
+      try {
+        capture.recorder.stop();
+      } catch (_error) {
+        // A recorder can become inactive between the state check and stop.
+      }
+    }
+    cleanupShadowCaptureResources(capture);
+    if (state.shadowCapture === capture) state.shadowCapture = null;
+    applyPlayerVolume(state.volume);
+  }
+
+  function clearShadowPlaybackWatchdog() {
+    if (state.shadowPlaybackWatchdog) {
+      window.clearTimeout(state.shadowPlaybackWatchdog);
+      state.shadowPlaybackWatchdog = null;
+    }
+  }
+
+  function resetShadowRound(options) {
+    const config = options || {};
+    clearShadowPlaybackWatchdog();
+    discardShadowCapture();
+    pausePlayback();
+    clearShadowAudio();
+    state.shadowResult = null;
+    state.shadowPhase = "idle";
+    state.shadowReferenceEndTime = 0;
+    state.shadowReferenceReturnPhase = null;
+    const maximum = Math.max(0, state.transcript.length - 1);
+    const fallback = state.activeIndex >= 0 ? state.activeIndex : state.shadowRoundIndex;
+    state.shadowRoundIndex = Math.max(0, Math.min(maximum, Number.isInteger(config.index) ? config.index : fallback));
+    if (config.seek && state.transcript[state.shadowRoundIndex]) {
+      seekTo(state.transcript[state.shadowRoundIndex].start, { play: false });
+    }
+    renderShadowUi();
+  }
+
+  function updateShadowRoundPosition(index) {
+    const safeIndex = Number.isInteger(index) && index >= 0 ? index : state.shadowRoundIndex;
+    elements.shadowSentencePosition.textContent = state.transcript.length
+      ? `第 ${safeIndex + 1} 句 / ${state.transcript.length}`
+      : "第 1 句 / 0";
+  }
+
+  function shadowTimedWords(segment) {
+    if (!segment) return [];
+    const fallbackTokens = String(segment.text || "").split(/\s+/).filter(Boolean);
+    const duration = Math.max(0.1, segment.end - segment.start);
+    if (Array.isArray(segment.words) && segment.words.length === fallbackTokens.length) {
+      return segment.words.map((word) => ({ ...word }));
+    }
+    return fallbackTokens.map((text, index) => ({
+      text,
+      start: segment.start + (duration * index) / Math.max(1, fallbackTokens.length),
+      end: segment.start + (duration * (index + 1)) / Math.max(1, fallbackTokens.length),
+    }));
+  }
+
+  function formatShadowDuration(seconds) {
+    const duration = Math.max(0, Number(seconds) || 0);
+    if (duration > 0 && duration < 10) return `${duration.toFixed(1)}s`;
+    return formatTime(duration);
+  }
+
+  function normalizeShadowToken(value) {
+    const match = String(value || "")
+      .toLocaleLowerCase(state.learningLanguage === "es" ? "es" : "en")
+      .match(/[\p{L}\p{M}\p{N}]+(?:['’][\p{L}\p{M}\p{N}]+)*/u);
+    return match ? match[0].replace(/’/g, "'") : "";
+  }
+
+  function shadowWordIsLinked(word, nextWord) {
+    const current = normalizeShadowToken(word);
+    const following = normalizeShadowToken(nextWord);
+    if (!current || !following) return false;
+    const currentEnd = current[current.length - 1];
+    const followingStart = following[0];
+    return /[bcdfghjklmnpqrstvwxyzñ]/i.test(currentEnd)
+      && /[aeiouáéíóúü]/i.test(followingStart);
+  }
+
+  function shadowStressIndexes(words) {
+    const durations = words
+      .map((word) => Math.max(0, Number(word.end) - Number(word.start)))
+      .filter((duration) => duration > 0)
+      .sort((a, b) => a - b);
+    const median = durations.length ? durations[Math.floor(durations.length / 2)] : 0;
+    const result = new Set();
+    words.forEach((word, index) => {
+      const normalized = normalizeShadowToken(word.text);
+      if (!normalized || SHADOW_WEAK_WORDS.has(normalized)) return;
+      const duration = Math.max(0, Number(word.end) - Number(word.start));
+      if (normalized.length >= 5 || duration >= median * 1.08 || index === words.length - 1) {
+        result.add(index);
+      }
+    });
+    return result;
+  }
+
+  function renderShadowPrompt(index) {
+    const segmentIndex = Number.isInteger(index)
+      ? index
+      : state.shadowVariant === "delayed" && state.shadowPhase === "recording" && state.activeIndex >= 0
+        ? state.activeIndex
+        : state.shadowRoundIndex;
+    const segment = state.transcript[segmentIndex];
+    const blind = state.shadowVariant === "blind"
+      && !["results", "replaying-result"].includes(state.shadowPhase);
+    elements.shadowPromptKicker.textContent = state.shadowVariant === "assist"
+      ? "节奏脚本"
+      : state.shadowVariant === "delayed"
+        ? state.shadowDelay === 0 ? "同步提示" : `延迟 ${state.shadowDelay.toFixed(1)} 秒`
+        : state.shadowVariant === "blind"
+          ? "听觉挑战"
+          : "当前句";
+    elements.shadowPromptText.classList.toggle("is-hidden", blind);
+    elements.shadowBlindPlaceholder.classList.toggle("is-hidden", !blind);
+    elements.shadowRhythmGuide.classList.toggle("is-hidden", state.shadowVariant !== "assist" || blind);
+    elements.shadowPromptText.replaceChildren();
+    if (!segment) {
+      elements.shadowPromptText.textContent = "字幕准备好后，从第一句开始。";
+      elements.shadowReferenceDuration.textContent = "00:00";
+      return;
+    }
+
+    const words = shadowTimedWords(segment);
+    const stressIndexes = shadowStressIndexes(words);
+    words.forEach((word, wordIndex) => {
+      const span = document.createElement("span");
+      span.className = "shadow-word";
+      span.dataset.start = String(word.start);
+      span.dataset.end = String(word.end);
+      span.dataset.wordIndex = String(wordIndex);
+      span.textContent = word.text;
+      if (state.shadowVariant === "assist") {
+        const normalized = normalizeShadowToken(word.text);
+        span.classList.toggle("is-weak", SHADOW_WEAK_WORDS.has(normalized));
+        span.classList.toggle("is-stress", stressIndexes.has(wordIndex));
+        span.classList.toggle("is-linked", shadowWordIsLinked(word.text, words[wordIndex + 1]?.text));
+      }
+      elements.shadowPromptText.appendChild(span);
+
+      if (state.shadowVariant === "assist") {
+        const gap = words[wordIndex + 1]
+          ? Number(words[wordIndex + 1].start) - Number(word.end)
+          : 0;
+        const punctuation = String(word.text || "").match(/[.!?,;:]+$/)?.[0] || "";
+        if (/[.!?]/.test(punctuation) || gap >= 0.55) {
+          const pause = document.createElement("span");
+          pause.className = "shadow-pause-mark";
+          pause.textContent = "//";
+          elements.shadowPromptText.appendChild(pause);
+        } else if (/[,;:]/.test(punctuation) || gap >= 0.26) {
+          const pause = document.createElement("span");
+          pause.className = "shadow-pause-mark";
+          pause.textContent = "/";
+          elements.shadowPromptText.appendChild(pause);
+        }
+        if (wordIndex === words.length - 1) {
+          const intonation = document.createElement("span");
+          intonation.className = "shadow-intonation-mark";
+          intonation.textContent = /\?\s*$/.test(segment.text) ? "↗" : "↘";
+          elements.shadowPromptText.appendChild(intonation);
+        }
+      }
+      if (wordIndex < words.length - 1) {
+        elements.shadowPromptText.appendChild(document.createTextNode(" "));
+      }
+    });
+    elements.shadowReferenceDuration.textContent = formatShadowDuration(segment.end - segment.start);
+  }
+
+  function updateShadowCue(time) {
+    if (state.practiceMode !== "shadow") return;
+    const words = elements.shadowPromptText.querySelectorAll(".shadow-word");
+    if (!words.length) return;
+    const referenceActive = ["playing-reference", "replaying-result"].includes(state.shadowPhase)
+      || (state.shadowPhase === "recording" && state.shadowVariant === "delayed");
+    const shadowTime = Number(time) - (state.shadowVariant === "delayed" ? state.shadowDelay : 0);
+    words.forEach((word) => {
+      const start = Number(word.dataset.start);
+      const end = Number(word.dataset.end);
+      word.classList.toggle("is-reference-current", referenceActive && time >= start && time < end);
+      word.classList.toggle(
+        "is-shadow-current",
+        state.shadowPhase === "recording"
+          && state.shadowVariant === "delayed"
+          && shadowTime >= start
+          && shadowTime < end,
+      );
+    });
+  }
+
+  function shadowPhaseCopy() {
+    if (state.shadowPhase === "playing-reference") return "正在播放原句";
+    if (state.shadowPhase === "replaying-result") return "正在回放参考音";
+    if (state.shadowPhase === "requesting-microphone") return "正在请求麦克风";
+    if (state.shadowPhase === "ready-record") return "可以开始跟读";
+    if (state.shadowPhase === "recording") return "正在录音";
+    if (state.shadowPhase === "processing") return "正在生成反馈";
+    if (state.shadowPhase === "results") return "本轮反馈已完成";
+    return state.shadowVariant === "delayed" ? "准备就绪" : "先听原句";
+  }
+
+  function renderShadowSteps() {
+    const phase = state.shadowPhase;
+    let currentStep = "listen";
+    if (["ready-record", "requesting-microphone", "recording"].includes(phase)) currentStep = "speak";
+    if (["processing", "results", "replaying-result"].includes(phase)) currentStep = "review";
+    const order = ["listen", "speak", "review"];
+    const currentIndex = order.indexOf(currentStep);
+    elements.shadowSteps.forEach((step) => {
+      const stepIndex = order.indexOf(step.dataset.shadowStep);
+      step.classList.toggle("is-active", stepIndex === currentIndex);
+      step.classList.toggle("is-complete", stepIndex < currentIndex);
+    });
+  }
+
+  function shadowCaptureTranscript(capture) {
+    if (!capture) return "";
+    return capture.recognitionResults
+      .map((result) => result && result.transcript)
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function renderShadowUi() {
+    const delayed = state.shadowVariant === "delayed";
+    const hasTranscript = state.interactiveReady && state.transcript.length > 0;
+    const configurationLocked = ["requesting-microphone", "recording", "processing"].includes(state.shadowPhase);
+    let activeVariantButton = null;
+    elements.shadowVariants.forEach((button) => {
+      const active = button.dataset.shadowVariant === state.shadowVariant;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-checked", String(active));
+      button.disabled = !state.interactiveReady || configurationLocked;
+      if (active) activeVariantButton = button;
+    });
+    const activeVariantName = activeVariantButton?.querySelector("b")?.textContent || "训练方式";
+    const activeVariantDescription = activeVariantButton?.querySelector("small")?.textContent || "";
+    elements.shadowVariantCurrentName.textContent = activeVariantName;
+    elements.shadowVariantCurrentDescription.textContent = activeVariantDescription;
+    elements.shadowVariantPicker.querySelector("summary").setAttribute(
+      "aria-label",
+      `切换训练方式，当前：${activeVariantName}`,
+    );
+    if (configurationLocked) elements.shadowVariantPicker.open = false;
+    elements.shadowDelaySettings.classList.toggle("is-hidden", !delayed);
+    elements.shadowHeadphoneNote.classList.toggle(
+      "is-hidden",
+      !delayed || elements.shadowHeadphoneNote.dataset.dismissed === "true",
+    );
+    elements.shadowDelayHint.textContent = shadowDelayDescription();
+    const standardDelay = [0, 0.5, 0.8, 1.2].find((value) => value === state.shadowDelay);
+    elements.shadowDelaySelect.value = standardDelay === undefined ? "custom" : String(standardDelay);
+    elements.shadowCustomDelayWrap.classList.toggle("is-hidden", standardDelay !== undefined);
+    elements.shadowCustomDelay.value = String(state.shadowDelay);
+    elements.shadowDelaySelect.disabled = configurationLocked;
+    elements.shadowCustomDelay.disabled = configurationLocked;
+    elements.shadowMicrophoneSelect.disabled = configurationLocked
+      || elements.shadowMicrophoneSelect.dataset.available === "false";
+    elements.shadowPhaseLabel.textContent = shadowPhaseCopy();
+    updateShadowRoundPosition(
+      delayed && state.shadowPhase === "recording" && state.activeIndex >= 0
+        ? state.activeIndex
+        : state.shadowRoundIndex,
+    );
+    renderShadowSteps();
+    renderShadowPrompt();
+
+    const busy = ["requesting-microphone", "processing"].includes(state.shadowPhase);
+    elements.shadowReferenceButton.disabled = !hasTranscript || busy || state.shadowPhase === "recording";
+    const mayRecord = state.shadowPhase === "recording"
+      || (delayed && state.shadowPhase === "idle")
+      || (!delayed && state.shadowPhase === "ready-record");
+    elements.shadowRecordButton.disabled = !hasTranscript || !mayRecord || busy;
+    elements.shadowRecordButton.classList.toggle("is-recording", state.shadowPhase === "recording");
+    elements.shadowRecordButton.setAttribute(
+      "aria-label",
+      state.shadowPhase === "recording" ? "停止录音" : "开始录音",
+    );
+
+    if (state.shadowPhase === "recording") {
+      elements.shadowRecordLabel.textContent = "停止录音";
+      elements.shadowLiveTranscript.classList.add("is-live");
+      elements.shadowLiveTranscript.textContent = shadowRecordingStatus(state.shadowCapture);
+    } else if (state.shadowPhase === "ready-record") {
+      elements.shadowRecordLabel.textContent = "开始跟读";
+      elements.shadowLiveTranscript.textContent = "";
+      elements.shadowLiveTranscript.classList.remove("is-live");
+    } else if (state.shadowPhase === "requesting-microphone") {
+      elements.shadowRecordLabel.textContent = "正在连接麦克风";
+      elements.shadowLiveTranscript.textContent = "请允许浏览器使用麦克风";
+      elements.shadowLiveTranscript.classList.remove("is-live");
+    } else if (state.shadowPhase === "processing") {
+      elements.shadowRecordLabel.textContent = "生成反馈中";
+      elements.shadowLiveTranscript.textContent = "正在分析录音";
+      elements.shadowLiveTranscript.classList.remove("is-live");
+    } else if (delayed) {
+      elements.shadowRecordLabel.textContent = state.shadowDelay === 0 ? "开始同步跟读" : "开始延迟跟读";
+      elements.shadowLiveTranscript.textContent = "";
+      elements.shadowLiveTranscript.classList.remove("is-live");
+    } else {
+      elements.shadowRecordLabel.textContent = "开始跟读";
+      elements.shadowLiveTranscript.textContent = "";
+      elements.shadowLiveTranscript.classList.remove("is-live");
+    }
+    elements.shadowRecordingTimer.classList.toggle("is-hidden", state.shadowPhase !== "recording");
+    elements.shadowInputMeter.classList.toggle("is-hidden", state.shadowPhase !== "recording");
+    if (state.shadowPhase !== "recording") {
+      elements.shadowInputMeter.style.setProperty("--input-level", "0");
+    }
+    elements.shadowLiveTranscript.classList.toggle(
+      "is-hidden",
+      !elements.shadowLiveTranscript.textContent.trim(),
+    );
+
+    const referenceLabel = elements.shadowReferenceButton.querySelector("b");
+    if (referenceLabel) {
+      referenceLabel.textContent = ["playing-reference", "replaying-result"].includes(state.shadowPhase)
+        ? "正在播放"
+        : "播放原句";
+    }
+    const showResult = Boolean(state.shadowResult)
+      && ["results", "replaying-result"].includes(state.shadowPhase);
+    elements.shadowAudioCompare.classList.toggle("is-hidden", !showResult);
+    elements.shadowResults.classList.toggle("is-hidden", !showResult);
+    elements.shadowRecordingTimer.textContent = state.shadowPhase === "recording"
+      ? elements.shadowRecordingTimer.textContent
+      : "00:00.0";
+    elements.shadowNextButton.disabled = !state.shadowResult
+      || state.shadowResult.endIndex >= state.transcript.length - 1;
+    document.body.classList.toggle(
+      "shadow-blind-active",
+      state.practiceMode === "shadow"
+        && state.shadowVariant === "blind"
+        && !showResult,
+    );
+  }
+
+  function playShadowReference(options) {
+    const config = options || {};
+    if (!state.transcript.length || state.shadowPhase === "recording") return;
+    const result = config.result ? state.shadowResult : null;
+    const startIndex = result
+      ? result.startIndex
+      : Math.max(0, Math.min(state.transcript.length - 1, state.shadowRoundIndex));
+    const endIndex = result ? result.endIndex : startIndex;
+    const startSegment = state.transcript[startIndex];
+    const endSegment = state.transcript[endIndex];
+    if (!startSegment || !endSegment) return;
+    pausePlayback();
+    state.shadowReferenceEndTime = endSegment.end;
+    state.shadowReferenceReturnPhase = result
+      ? "results"
+      : state.shadowVariant === "delayed" ? "idle" : "ready-record";
+    state.shadowPhase = result ? "replaying-result" : "playing-reference";
+    renderShadowUi();
+    clearShadowPlaybackWatchdog();
+    seekTo(startSegment.start, { play: true });
+    if (state.playerKind === "youtube" && state.playerReady) {
+      state.shadowPlaybackWatchdog = window.setTimeout(() => {
+        state.shadowPlaybackWatchdog = null;
+        if (
+          !["playing-reference", "replaying-result"].includes(state.shadowPhase)
+          || state.playing
+        ) return;
+        handlePlayerError();
+        state.currentTime = startSegment.start;
+        state.lastTickAt = performance.now();
+        setPlaying(true);
+      }, 1200);
+    }
+  }
+
+  function completeShadowReference() {
+    clearShadowPlaybackWatchdog();
+    const returnPhase = state.shadowReferenceReturnPhase
+      || (state.shadowVariant === "delayed" ? "idle" : "ready-record");
+    const endTime = state.shadowReferenceEndTime;
+    pausePlayback();
+    if (endTime > 0) seekTo(endTime, { play: false });
+    state.shadowPhase = returnPhase;
+    state.shadowReferenceReturnPhase = null;
+    renderShadowUi();
+    if (returnPhase === "ready-record") {
+      window.requestAnimationFrame(() => elements.shadowRecordButton.focus());
+    }
+  }
+
+  function togglePracticePlayback() {
+    if (state.practiceMode !== "shadow") {
+      togglePlay();
+      return;
+    }
+    if (["playing-reference", "replaying-result"].includes(state.shadowPhase)) {
+      completeShadowReference();
+      return;
+    }
+    if (state.shadowPhase === "recording" && state.shadowVariant === "delayed") {
+      togglePlay();
+      return;
+    }
+    if (["requesting-microphone", "processing", "recording"].includes(state.shadowPhase)) return;
+    playShadowReference({ result: state.shadowPhase === "results" });
+  }
+
+  function retryShadowRound() {
+    const index = state.shadowResult ? state.shadowResult.startIndex : state.shadowRoundIndex;
+    resetShadowRound({ index, seek: true });
+  }
+
+  function nextShadowRound() {
+    const current = state.shadowResult ? state.shadowResult.endIndex : state.shadowRoundIndex;
+    const next = Math.min(state.transcript.length - 1, current + 1);
+    resetShadowRound({ index: next, seek: true });
+  }
+
+  function shadowRecognitionConstructor() {
+    return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  }
+
+  function shadowRecognitionIsFatal(code) {
+    return [
+      "audio-capture",
+      "language-not-supported",
+      "language-unavailable",
+      "network",
+      "not-allowed",
+      "restart-failed",
+      "service-not-allowed",
+      "start-failed",
+    ].includes(String(code || ""));
+  }
+
+  function shadowRecordingStatus(capture) {
+    if (!capture) return "正在录音";
+    const transcript = shadowCaptureTranscript(capture);
+    if (transcript) return `识别到：${transcript}`;
+    if (!capture.recognitionSupported) {
+      return capture.voiceDetected
+        ? "已检测到声音；当前浏览器不支持语音转文字"
+        : "正在录音；当前浏览器不支持语音转文字";
+    }
+    if (capture.recognitionError === "network") return "声音已录下；在线语音识别连接失败";
+    if (["not-allowed", "service-not-allowed"].includes(capture.recognitionError)) {
+      return "声音已录下；浏览器未允许语音识别";
+    }
+    if (capture.recognitionError === "audio-capture") return "语音识别没有取得当前麦克风";
+    if (["language-not-supported", "language-unavailable"].includes(capture.recognitionError)) {
+      return "声音已录下；浏览器不支持当前语言识别";
+    }
+    if (["start-failed", "restart-failed"].includes(capture.recognitionError)) {
+      return "声音已录下；浏览器语音识别未能启动";
+    }
+    if (capture.noInputDetected) {
+      return capture.microphoneLabel
+        ? `${capture.microphoneLabel} 没有检测到声音，请切换麦克风`
+        : "没有检测到声音；请切换麦克风";
+    }
+    if (capture.voiceDetected) return "已检测到声音，正在识别…";
+    if (capture.virtualMicrophone) return `当前使用 ${capture.microphoneLabel}；请确认它有输入`;
+    return "正在听你的声音…";
+  }
+
+  function updateShadowLiveTranscript(capture) {
+    if (state.shadowCapture !== capture || state.shadowPhase !== "recording") return;
+    elements.shadowLiveTranscript.textContent = shadowRecordingStatus(capture);
+    elements.shadowLiveTranscript.classList.add("is-live");
+    elements.shadowLiveTranscript.classList.remove("is-hidden");
+  }
+
+  function startShadowRecognitionSession(recognition, capture) {
+    const track = capture.stream?.getAudioTracks?.()[0];
+    try {
+      if (track) recognition.start(track);
+      else recognition.start();
+      return true;
+    } catch (error) {
+      if (track && error?.name !== "InvalidStateError") {
+        try {
+          recognition.start();
+          return true;
+        } catch (_fallbackError) {
+          // Report a single start failure below.
+        }
+      }
+      return false;
+    }
+  }
+
+  async function startShadowRecognition(capture) {
+    const Recognition = shadowRecognitionConstructor();
+    capture.recognitionSupported = Boolean(Recognition);
+    capture.recognitionResults = [];
+    capture.recognitionError = "";
+    capture.recognitionSessionOffset = 0;
+    capture.recognitionMode = "online";
+    if (!Recognition) return;
+
+    const recognition = new Recognition();
+    const recognitionLanguage = state.learningLanguage === "es"
+      ? (state.pronunciationAccent.startsWith("es") ? state.pronunciationAccent : "es-ES")
+      : (state.pronunciationAccent.startsWith("en") ? state.pronunciationAccent : "en-US");
+    recognition.lang = recognitionLanguage;
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    capture.recognition = recognition;
+
+    if ("processLocally" in recognition && typeof Recognition.available === "function") {
+      try {
+        const availability = await Promise.race([
+          Recognition.available({ langs: [recognitionLanguage], processLocally: true }),
+          delay(350).then(() => "timeout"),
+        ]);
+        if (availability === "available") {
+          recognition.processLocally = true;
+          capture.recognitionMode = "local";
+        }
+      } catch (_error) {
+        // Fall back to the browser's regular recognition service.
+      }
+    }
+    if (state.shadowCapture !== capture || capture.stopRequested || capture.discard) return;
+
+    recognition.onresult = (event) => {
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const alternative = result && result[0];
+        if (!alternative) continue;
+        capture.recognitionResults[capture.recognitionSessionOffset + index] = {
+          transcript: String(alternative.transcript || "").trim(),
+          confidence: Number(alternative.confidence) || 0,
+          final: Boolean(result.isFinal),
+        };
+      }
+      updateShadowLiveTranscript(capture);
+    };
+
+    recognition.onerror = (event) => {
+      const code = String(event.error || "recognition-error");
+      if (code === "no-speech") capture.noSpeechEvents += 1;
+      else if (code !== "aborted" || !capture.stopRequested) capture.recognitionError = code;
+      updateShadowLiveTranscript(capture);
+    };
+
+    recognition.onaudiostart = () => {
+      capture.recognitionAudioStarted = true;
+    };
+
+    recognition.onspeechstart = () => {
+      capture.voiceDetected = true;
+      capture.noInputDetected = false;
+      updateShadowLiveTranscript(capture);
+    };
+
+    recognition.onend = () => {
+      if (
+        state.shadowCapture !== capture
+        || capture.stopRequested
+        || capture.discard
+        || state.shadowPhase !== "recording"
+        || shadowRecognitionIsFatal(capture.recognitionError)
+      ) return;
+      capture.recognitionSessionOffset = capture.recognitionResults.length;
+      window.setTimeout(() => {
+        if (state.shadowCapture !== capture || capture.stopRequested || capture.discard) return;
+        if (!startShadowRecognitionSession(recognition, capture)) {
+          capture.recognitionError = capture.recognitionError || "restart-failed";
+          updateShadowLiveTranscript(capture);
+        }
+      }, 120);
+    };
+
+    if (!startShadowRecognitionSession(recognition, capture)) {
+      capture.recognitionError = "start-failed";
+      updateShadowLiveTranscript(capture);
+    }
+  }
+
+  function startShadowEnergyMonitor(capture) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    try {
+      const audioContext = new AudioContext();
+      const source = audioContext.createMediaStreamSource(capture.stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.25;
+      source.connect(analyser);
+      const buffer = new Float32Array(analyser.fftSize);
+      capture.audioContext = audioContext;
+      capture.energySamples = [];
+      if (audioContext.state === "suspended") audioContext.resume().catch(() => {});
+      capture.sampleTimer = window.setInterval(() => {
+        if (state.shadowCapture !== capture || capture.stopRequested) return;
+        analyser.getFloatTimeDomainData(buffer);
+        let sum = 0;
+        for (let index = 0; index < buffer.length; index += 1) {
+          sum += buffer[index] * buffer[index];
+        }
+        const elapsed = performance.now() - capture.startedAt;
+        const rms = Math.sqrt(sum / buffer.length);
+        capture.energySamples.push({ time: elapsed, rms });
+        const inputLevel = Math.max(0, Math.min(1, (rms - 0.002) * 32));
+        elements.shadowInputMeter.style.setProperty("--input-level", inputLevel.toFixed(3));
+
+        capture.voiceSampleCount = rms >= SHADOW_VOICE_RMS_THRESHOLD
+          ? capture.voiceSampleCount + 1
+          : Math.max(0, capture.voiceSampleCount - 1);
+        if (capture.voiceSampleCount >= 3) {
+          capture.voiceDetected = true;
+          capture.noInputDetected = false;
+        } else if (!capture.voiceDetected && elapsed >= SHADOW_SILENCE_WARNING_MS) {
+          capture.noInputDetected = true;
+        }
+        if (elapsed - capture.lastStatusAt >= 150) {
+          capture.lastStatusAt = elapsed;
+          updateShadowLiveTranscript(capture);
+        }
+      }, SHADOW_SAMPLE_INTERVAL_MS);
+    } catch (_error) {
+      capture.energySamples = [];
+    }
+  }
+
+  function cleanupShadowCaptureResources(capture) {
+    if (!capture) return;
+    if (capture.sampleTimer) {
+      window.clearInterval(capture.sampleTimer);
+      capture.sampleTimer = null;
+    }
+    if (capture.audioContext) {
+      capture.audioContext.close().catch(() => {});
+      capture.audioContext = null;
+    }
+    if (capture.stream) {
+      capture.stream.getTracks().forEach((track) => track.stop());
+    }
+    if (state.shadowTimerFrame !== null) {
+      window.cancelAnimationFrame(state.shadowTimerFrame);
+      state.shadowTimerFrame = null;
+    }
+    elements.shadowInputMeter.style.setProperty("--input-level", "0");
+  }
+
+  function updateShadowRecordingTimer(capture) {
+    if (state.shadowCapture !== capture || state.shadowPhase !== "recording") return;
+    const elapsed = Math.max(0, performance.now() - capture.startedAt);
+    const minutes = Math.floor(elapsed / 60000);
+    const seconds = Math.floor((elapsed % 60000) / 1000);
+    const tenths = Math.floor((elapsed % 1000) / 100);
+    elements.shadowRecordingTimer.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${tenths}`;
+    state.shadowTimerFrame = window.requestAnimationFrame(() => updateShadowRecordingTimer(capture));
+  }
+
+  function preferredShadowMimeType() {
+    if (!window.MediaRecorder || typeof window.MediaRecorder.isTypeSupported !== "function") return "";
+    return [
+      "audio/webm;codecs=opus",
+      "audio/ogg;codecs=opus",
+      "audio/webm",
+      "audio/mp4",
+    ].find((type) => window.MediaRecorder.isTypeSupported(type)) || "";
+  }
+
+  function shadowMicrophoneErrorCopy(error) {
+    const name = String(error?.name || "");
+    if (["NotAllowedError", "PermissionDeniedError", "SecurityError"].includes(name)) {
+      return ["需要麦克风权限", "请在地址栏允许这个页面使用麦克风，然后再次尝试。"];
+    }
+    if (name === "NotFoundError") {
+      return ["没有找到麦克风", "请重新连接带麦克风的耳机，或在 Windows 中启用录音设备。"];
+    }
+    if (["NotReadableError", "TrackStartError", "AbortError"].includes(name)) {
+      return ["麦克风暂不可用", "请关闭可能独占麦克风的应用，再选择正确的录音设备。"];
+    }
+    if (name === "OverconstrainedError") {
+      return ["所选麦克风不可用", "设备可能已断开，请改用系统默认麦克风。"];
+    }
+    return ["麦克风暂不可用", "请检查 Windows 录音设备和浏览器麦克风权限。"];
+  }
+
+  async function startShadowRecording() {
+    if (state.shadowCapture || !state.transcript.length) return;
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function" || !window.MediaRecorder) {
+      showToast(
+        window.isSecureContext ? "当前浏览器无法录音" : "当前网页地址无法使用麦克风",
+        window.isSecureContext
+          ? "请使用最新版 Chrome 或 Edge，并允许网页访问麦克风。"
+          : "请通过 http://127.0.0.1 打开 VReply。",
+      );
+      return;
+    }
+
+    const startIndex = Math.max(0, Math.min(state.transcript.length - 1, state.shadowRoundIndex));
+    const startSegment = state.transcript[startIndex];
+    if (!startSegment) return;
+    state.shadowPhase = "requesting-microphone";
+    renderShadowUi();
+
+    let stream;
+    let microphoneError = null;
+    const audioConstraints = {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: 1,
+    };
+    if (state.shadowMicrophoneId) {
+      audioConstraints.deviceId = { exact: state.shadowMicrophoneId };
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+    } catch (error) {
+      microphoneError = error;
+      if (
+        state.shadowMicrophoneId
+        && ["NotFoundError", "OverconstrainedError"].includes(String(error?.name || ""))
+      ) {
+        state.shadowMicrophoneId = "";
+        persistShadowSettings();
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              channelCount: 1,
+            },
+          });
+          showToast("已改用系统默认麦克风", "原先选择的录音设备已经不可用。");
+        } catch (fallbackError) {
+          microphoneError = fallbackError;
+        }
+      }
+    }
+    if (!stream) {
+      state.shadowPhase = state.shadowVariant === "delayed" ? "idle" : "ready-record";
+      renderShadowUi();
+      const [title, detail] = shadowMicrophoneErrorCopy(microphoneError);
+      showToast(title, detail);
+      return;
+    }
+
+    if (state.practiceMode !== "shadow") {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+
+    const mimeType = preferredShadowMimeType();
+    let recorder;
+    try {
+      recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    } catch (_error) {
+      stream.getTracks().forEach((track) => track.stop());
+      state.shadowPhase = state.shadowVariant === "delayed" ? "idle" : "ready-record";
+      renderShadowUi();
+      showToast("无法创建录音", "当前浏览器不支持可用的音频录制格式。");
+      return;
+    }
+
+    const capture = {
+      stream,
+      recorder,
+      chunks: [],
+      energySamples: [],
+      startedAt: performance.now(),
+      durationMs: 0,
+      startIndex,
+      variant: state.shadowVariant,
+      delay: state.shadowDelay,
+      videoStartTime: startSegment.start,
+      stopVideoTime: startSegment.start,
+      stopRequested: false,
+      discard: false,
+      recognition: null,
+      recognitionSupported: false,
+      recognitionResults: [],
+      recognitionError: "",
+      recognitionMode: "online",
+      recognitionAudioStarted: false,
+      noSpeechEvents: 0,
+      microphoneLabel: "",
+      virtualMicrophone: false,
+      voiceDetected: false,
+      noInputDetected: false,
+      voiceSampleCount: 0,
+      lastStatusAt: 0,
+      sampleTimer: null,
+      audioContext: null,
+      resolveStopped: null,
+    };
+    const audioTrack = stream.getAudioTracks()[0];
+    if (audioTrack) {
+      try {
+        audioTrack.contentHint = "speech-recognition";
+      } catch (_error) {
+        // Older browsers expose no writable content hint.
+      }
+      capture.microphoneLabel = shadowMicrophoneName({ label: audioTrack.label }, 0);
+      capture.virtualMicrophone = shadowMicrophoneIsVirtual(capture.microphoneLabel);
+    }
+    capture.stopped = new Promise((resolve) => {
+      capture.resolveStopped = resolve;
+    });
+    recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size) capture.chunks.push(event.data);
+    };
+    recorder.onstop = () => {
+      const type = recorder.mimeType || mimeType || "audio/webm";
+      capture.resolveStopped(new Blob(capture.chunks, { type }));
+    };
+    recorder.onerror = () => {
+      capture.recognitionError = capture.recognitionError || "recorder-error";
+    };
+
+    state.shadowCapture = capture;
+    state.shadowResult = null;
+    clearShadowAudio();
+    void refreshShadowMicrophones();
+    void startShadowRecognition(capture);
+    startShadowEnergyMonitor(capture);
+    recorder.start(200);
+    state.shadowPhase = "recording";
+    state.shadowReferenceEndTime = 0;
+    if (capture.variant === "delayed") {
+      state.loopLine = false;
+      elements.loopButton.classList.remove("is-active");
+      elements.loopButton.setAttribute("aria-pressed", "false");
+      applyPlayerVolume(Math.min(state.volume, SHADOW_REDUCED_VOLUME));
+      seekTo(startSegment.start, { play: true });
+      clearShadowPlaybackWatchdog();
+      if (state.playerKind === "youtube" && state.playerReady) {
+        state.shadowPlaybackWatchdog = window.setTimeout(() => {
+          state.shadowPlaybackWatchdog = null;
+          if (state.shadowPhase !== "recording" || state.playing) return;
+          handlePlayerError();
+          state.currentTime = startSegment.start;
+          state.lastTickAt = performance.now();
+          setPlaying(true);
+        }, 1200);
+      }
+    } else {
+      pausePlayback();
+    }
+    renderShadowUi();
+    updateShadowRecordingTimer(capture);
+  }
+
+  function requestShadowRecordingToggle() {
+    if (state.shadowPhase === "recording") {
+      void stopShadowRecording();
+    } else {
+      void startShadowRecording();
+    }
+  }
+
+  async function stopShadowRecording() {
+    const capture = state.shadowCapture;
+    if (!capture || capture.stopRequested) return;
+    capture.stopRequested = true;
+    clearShadowPlaybackWatchdog();
+    capture.durationMs = Math.max(1, performance.now() - capture.startedAt);
+    capture.stopVideoTime = state.currentTime;
+    state.shadowPhase = "processing";
+    if (capture.variant === "delayed") pausePlayback();
+    applyPlayerVolume(state.volume);
+    renderShadowUi();
+
+    if (capture.recognition) {
+      try {
+        capture.recognition.stop();
+      } catch (_error) {
+        // Recognition may have stopped itself after silence.
+      }
+    }
+    if (capture.recorder.state !== "inactive") {
+      try {
+        capture.recorder.stop();
+      } catch (_error) {
+        // Use the chunks collected so far.
+      }
+    }
+
+    const fallbackBlob = () => new Blob(capture.chunks, {
+      type: capture.recorder.mimeType || "audio/webm",
+    });
+    const blob = await Promise.race([
+      capture.stopped,
+      delay(1400).then(fallbackBlob),
+    ]);
+    await delay(220);
+    cleanupShadowCaptureResources(capture);
+    if (capture.discard || state.shadowCapture !== capture) return;
+
+    if (blob && blob.size) {
+      state.shadowAudioUrl = URL.createObjectURL(blob);
+      elements.shadowUserAudio.src = state.shadowAudioUrl;
+      elements.shadowUserAudio.load();
+    }
+    state.shadowResult = analyzeShadowAttempt(capture);
+    state.shadowCapture = null;
+    state.shadowPhase = "results";
+    renderShadowResult(state.shadowResult);
+    renderShadowUi();
+  }
+
+  function tokenizeShadowText(text) {
+    return Array.from(String(text || "").matchAll(/[\p{L}\p{M}\p{N}]+(?:['’][\p{L}\p{M}\p{N}]+)*/gu))
+      .map((match) => ({
+        text: match[0],
+        normalized: normalizeShadowToken(match[0]),
+      }))
+      .filter((token) => token.normalized);
+  }
+
+  function alignShadowWords(expected, recognized) {
+    const rows = expected.length + 1;
+    const columns = recognized.length + 1;
+    const costs = Array.from({ length: rows }, () => Array(columns).fill(0));
+    const moves = Array.from({ length: rows }, () => Array(columns).fill(""));
+    for (let row = 1; row < rows; row += 1) {
+      costs[row][0] = row;
+      moves[row][0] = "delete";
+    }
+    for (let column = 1; column < columns; column += 1) {
+      costs[0][column] = column;
+      moves[0][column] = "insert";
+    }
+    for (let row = 1; row < rows; row += 1) {
+      for (let column = 1; column < columns; column += 1) {
+        const matches = expected[row - 1].normalized === recognized[column - 1].normalized;
+        const choices = [
+          { cost: costs[row - 1][column - 1] + (matches ? 0 : 1), move: matches ? "match" : "substitute" },
+          { cost: costs[row - 1][column] + 1, move: "delete" },
+          { cost: costs[row][column - 1] + 1, move: "insert" },
+        ].sort((left, right) => left.cost - right.cost);
+        costs[row][column] = choices[0].cost;
+        moves[row][column] = choices[0].move;
+      }
+    }
+
+    const operations = [];
+    let row = expected.length;
+    let column = recognized.length;
+    while (row > 0 || column > 0) {
+      const move = moves[row][column] || (row > 0 ? "delete" : "insert");
+      if (move === "match" || move === "substitute") {
+        operations.push({
+          type: move,
+          expected: expected[row - 1],
+          recognized: recognized[column - 1],
+          expectedIndex: row - 1,
+          recognizedIndex: column - 1,
+        });
+        row -= 1;
+        column -= 1;
+      } else if (move === "delete") {
+        operations.push({
+          type: "delete",
+          expected: expected[row - 1],
+          recognized: null,
+          expectedIndex: row - 1,
+          recognizedIndex: -1,
+        });
+        row -= 1;
+      } else {
+        operations.push({
+          type: "insert",
+          expected: null,
+          recognized: recognized[column - 1],
+          expectedIndex: -1,
+          recognizedIndex: column - 1,
+        });
+        column -= 1;
+      }
+    }
+    return operations.reverse();
+  }
+
+  function shadowVoiceAnalysis(samples, durationMs) {
+    const usableSamples = Array.isArray(samples)
+      ? samples.filter((sample) => Number.isFinite(sample.rms) && Number.isFinite(sample.time))
+      : [];
+    if (!usableSamples.length) {
+      return {
+        available: false,
+        intervals: [],
+        firstSpeechMs: 0,
+        lastSpeechMs: durationMs,
+        speechDurationMs: durationMs,
+        pauseDurationMs: 0,
+        longPauseCount: 0,
+        threshold: 0,
+        voiceMedian: 0,
+      };
+    }
+    const levels = usableSamples.map((sample) => sample.rms).sort((a, b) => a - b);
+    const floor = levels[Math.floor(levels.length * 0.2)] || 0;
+    const peak = levels[levels.length - 1] || 0;
+    const threshold = Math.max(0.012, floor * 2.1, peak * 0.12);
+    const active = usableSamples.filter((sample) => sample.rms >= threshold);
+    if (!active.length) {
+      return {
+        available: true,
+        intervals: [],
+        firstSpeechMs: durationMs,
+        lastSpeechMs: 0,
+        speechDurationMs: 0,
+        pauseDurationMs: durationMs,
+        longPauseCount: 0,
+        threshold,
+        voiceMedian: 0,
+      };
+    }
+
+    const intervals = [];
+    let start = active[0].time;
+    let end = active[0].time + SHADOW_SAMPLE_INTERVAL_MS;
+    for (let index = 1; index < active.length; index += 1) {
+      const sample = active[index];
+      if (sample.time - end <= 180) {
+        end = sample.time + SHADOW_SAMPLE_INTERVAL_MS;
+      } else {
+        if (end - start >= 110) intervals.push({ start, end });
+        start = sample.time;
+        end = sample.time + SHADOW_SAMPLE_INTERVAL_MS;
+      }
+    }
+    if (end - start >= 110) intervals.push({ start, end });
+    if (!intervals.length) intervals.push({ start: active[0].time, end });
+
+    const firstSpeechMs = intervals[0].start;
+    const lastSpeechMs = intervals[intervals.length - 1].end;
+    const speechDurationMs = intervals.reduce((total, interval) => total + interval.end - interval.start, 0);
+    let pauseDurationMs = 0;
+    let longPauseCount = 0;
+    for (let index = 1; index < intervals.length; index += 1) {
+      const gap = intervals[index].start - intervals[index - 1].end;
+      pauseDurationMs += Math.max(0, gap);
+      if (gap >= 480) longPauseCount += 1;
+    }
+    const activeLevels = usableSamples
+      .filter((sample) => sample.rms >= threshold)
+      .map((sample) => sample.rms)
+      .sort((a, b) => a - b);
+    return {
+      available: true,
+      intervals,
+      firstSpeechMs,
+      lastSpeechMs,
+      speechDurationMs,
+      pauseDurationMs,
+      longPauseCount,
+      threshold,
+      voiceMedian: activeLevels[Math.floor(activeLevels.length / 2)] || 0,
+    };
+  }
+
+  function clampShadowScore(value) {
+    return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+  }
+
+  function shadowExpectedAttempt(capture) {
+    const startIndex = capture.startIndex;
+    let endIndex = startIndex;
+    if (capture.variant === "delayed") {
+      const cutoff = Math.max(
+        state.transcript[startIndex].start,
+        capture.stopVideoTime - capture.delay + 0.12,
+      );
+      for (let index = startIndex; index < state.transcript.length; index += 1) {
+        if (state.transcript[index].start > cutoff) break;
+        endIndex = index;
+      }
+    }
+    const segments = state.transcript.slice(startIndex, endIndex + 1);
+    const referenceStart = segments[0]?.start || 0;
+    const referenceEnd = segments[segments.length - 1]?.end || referenceStart;
+    const words = [];
+    segments.forEach((segment) => {
+      const timedWords = shadowTimedWords(segment);
+      const stresses = shadowStressIndexes(timedWords);
+      timedWords.forEach((word, index) => {
+        const normalized = normalizeShadowToken(word.text);
+        if (!normalized) return;
+        words.push({
+          text: word.text,
+          normalized,
+          start: Math.max(0, Number(word.start) - referenceStart),
+          end: Math.max(0, Number(word.end) - referenceStart),
+          stress: stresses.has(index),
+        });
+      });
+    });
+    return {
+      startIndex,
+      endIndex,
+      segments,
+      words,
+      text: segments.map((segment) => segment.text).join(" "),
+      duration: Math.max(0.1, referenceEnd - referenceStart),
+    };
+  }
+
+  function shadowReferencePauseCount(expected) {
+    let count = 0;
+    for (let index = 1; index < expected.words.length; index += 1) {
+      if (expected.words[index].start - expected.words[index - 1].end >= 0.32) count += 1;
+    }
+    return count;
+  }
+
+  function markShadowTimingHints(operations, expected, recognized, voice, samples) {
+    const recognizedCount = Math.max(1, recognized.length - 1);
+    const expectedCount = Math.max(1, expected.words.length - 1);
+    operations.forEach((operation) => {
+      if (operation.type !== "match") return;
+      const expectedPosition = operation.expectedIndex / expectedCount;
+      const recognizedPosition = operation.recognizedIndex / recognizedCount;
+      operation.rhythmAttention = Math.abs(expectedPosition - recognizedPosition) > 0.16;
+      if (!operation.expected.stress || !voice.available || !voice.voiceMedian) return;
+      const speechSpan = Math.max(1, voice.lastSpeechMs - voice.firstSpeechMs);
+      const wordStart = voice.firstSpeechMs + (operation.expected.start / expected.duration) * speechSpan;
+      const wordEnd = voice.firstSpeechMs + (operation.expected.end / expected.duration) * speechSpan;
+      const wordSamples = samples.filter((sample) => sample.time >= wordStart && sample.time <= wordEnd);
+      if (!wordSamples.length) return;
+      const average = wordSamples.reduce((total, sample) => total + sample.rms, 0) / wordSamples.length;
+      operation.stressGap = average < voice.voiceMedian * 0.78;
+    });
+  }
+
+  function shadowLeakAssessment(capture, voice) {
+    if (capture.variant !== "delayed") return { label: "原声已隔离", warning: false };
+    if (capture.delay === 0) return { label: "需佩戴耳机", warning: true };
+    if (voice.available && voice.intervals.length && voice.firstSpeechMs < capture.delay * 1000 * 0.5) {
+      return { label: "疑似串音", warning: true };
+    }
+    return { label: "未见明显串音", warning: false };
+  }
+
+  function analyzeShadowAttempt(capture) {
+    const expected = shadowExpectedAttempt(capture);
+    const recognizedText = shadowCaptureTranscript(capture);
+    const recognized = tokenizeShadowText(recognizedText);
+    const recognitionUnavailable = !capture.recognitionSupported
+      || shadowRecognitionIsFatal(capture.recognitionError);
+    const contentAvailable = !recognitionUnavailable;
+    const operations = contentAvailable ? alignShadowWords(expected.words, recognized) : [];
+    const substitutions = operations.filter((operation) => operation.type === "substitute").length;
+    const deletions = operations.filter((operation) => operation.type === "delete").length;
+    const insertions = operations.filter((operation) => operation.type === "insert").length;
+    const errors = substitutions + deletions + insertions;
+    const denominator = Math.max(1, expected.words.length);
+    const wer = contentAvailable ? Math.round((errors / denominator) * 100) : null;
+    const contentScore = contentAvailable
+      ? clampShadowScore(100 * (1 - ((substitutions + deletions + insertions * 0.5) / denominator)))
+      : null;
+    const voice = shadowVoiceAnalysis(capture.energySamples, capture.durationMs);
+    const noInputDetected = voice.available && !voice.intervals.length && !recognized.length;
+    const speechSpanMs = voice.intervals.length
+      ? Math.max(1, voice.lastSpeechMs - voice.firstSpeechMs)
+      : capture.durationMs;
+    const targetWpm = (expected.words.length / Math.max(0.1, expected.duration)) * 60;
+    const userWpm = recognized.length
+      ? (recognized.length / Math.max(1, speechSpanMs) * 60000)
+      : null;
+    const paceScore = userWpm
+      ? clampShadowScore(100 - Math.abs(Math.log(Math.max(0.1, userWpm / targetWpm))) * 68)
+      : 72;
+    const speechCoverage = voice.intervals.length
+      ? voice.speechDurationMs / Math.max(1, speechSpanMs)
+      : recognized.length ? 0.72 : 0;
+    const coverageScore = clampShadowScore(100 - Math.abs(speechCoverage - 0.78) * 115);
+    const fluencyScore = voice.available && !voice.intervals.length
+      ? 0
+      : clampShadowScore(coverageScore * 0.45 + paceScore * 0.55 - voice.longPauseCount * 7);
+
+    const durationRatio = (speechSpanMs / 1000) / Math.max(0.1, expected.duration);
+    const durationScore = clampShadowScore(100 - Math.abs(Math.log(Math.max(0.1, durationRatio))) * 72);
+    const referencePauses = shadowReferencePauseCount(expected);
+    const pauseScore = clampShadowScore(100 - Math.abs(voice.longPauseCount - referencePauses) * 13);
+    const matches = operations.filter((operation) => operation.type === "match");
+    const positionError = matches.length
+      ? matches.reduce((total, operation) => {
+          const expectedPosition = operation.expectedIndex / Math.max(1, expected.words.length - 1);
+          const recognizedPosition = operation.recognizedIndex / Math.max(1, recognized.length - 1);
+          return total + Math.abs(expectedPosition - recognizedPosition);
+        }, 0) / matches.length
+      : 0.18;
+    const timingScore = clampShadowScore(100 - positionError * 170);
+    const rhythmScore = clampShadowScore(durationScore * 0.55 + pauseScore * 0.2 + timingScore * 0.25);
+    const overall = contentAvailable
+      ? clampShadowScore(contentScore * 0.4 + rhythmScore * 0.3 + fluencyScore * 0.3)
+      : clampShadowScore(rhythmScore * 0.55 + fluencyScore * 0.45);
+
+    markShadowTimingHints(operations, expected, recognized, voice, capture.energySamples);
+    const leak = shadowLeakAssessment(capture, voice);
+    return {
+      startIndex: expected.startIndex,
+      endIndex: expected.endIndex,
+      expectedText: expected.text,
+      expectedWords: expected.words,
+      recognizedText,
+      recognitionUnavailable,
+      recognitionError: capture.recognitionError,
+      noInputDetected,
+      microphoneLabel: capture.microphoneLabel,
+      operations,
+      overall,
+      contentScore,
+      fluencyScore,
+      rhythmScore,
+      wer,
+      wpm: userWpm ? Math.round(userWpm) : null,
+      targetWpm: Math.round(targetWpm),
+      longPauseCount: voice.longPauseCount,
+      leak,
+      durationMs: capture.durationMs,
+    };
+  }
+
+  function shadowResultSummary(result) {
+    if (result.noInputDetected) {
+      return result.microphoneLabel
+        ? `${result.microphoneLabel} 没有检测到声音，请切换麦克风后重试。`
+        : "没有检测到麦克风输入，请切换麦克风后重试。";
+    }
+    if (result.recognitionUnavailable) {
+      return "录音完成；本次未获得浏览器识别文本，内容完整度没有计入总分。";
+    }
+    const scores = [
+      { key: "content", value: result.contentScore },
+      { key: "rhythm", value: result.rhythmScore },
+      { key: "fluency", value: result.fluencyScore },
+    ].sort((left, right) => left.value - right.value);
+    if (result.overall >= 88) return "这一遍已经很接近原声。下一遍可以缩短延迟，保持同样的完整度。";
+    if (scores[0].key === "content") return "先把红色漏词补齐，再追求更快的速度。";
+    if (scores[0].key === "rhythm") return "内容已经跟上；下一遍重点模仿词间距和停顿位置。";
+    return "尽量一口气完成意群，减少中途停顿和自我修正。";
+  }
+
+  function renderShadowResult(result) {
+    if (!result) return;
+    elements.shadowOverallScore.style.setProperty("--score", String(result.overall));
+    elements.shadowOverallValue.textContent = String(result.overall);
+    elements.shadowContentScore.textContent = result.contentScore === null ? "--" : String(result.contentScore);
+    elements.shadowFluencyScore.textContent = String(result.fluencyScore);
+    elements.shadowRhythmScore.textContent = String(result.rhythmScore);
+    elements.shadowResultSummary.textContent = shadowResultSummary(result);
+    elements.shadowWpm.textContent = result.wpm ? `${result.wpm} 词/分` : "--";
+    elements.shadowPauseCount.textContent = String(result.longPauseCount);
+    elements.shadowWer.textContent = result.wer === null ? "--" : `${result.wer}%`;
+    elements.shadowLeakStatus.textContent = result.leak.label;
+    elements.shadowLeakStatus.classList.toggle("has-warning", result.leak.warning);
+    elements.shadowOriginalAudioMeta.textContent = result.startIndex === result.endIndex
+      ? `第 ${result.startIndex + 1} 句`
+      : `第 ${result.startIndex + 1}–${result.endIndex + 1} 句`;
+
+    const fragment = document.createDocumentFragment();
+    if (result.recognitionUnavailable) {
+      result.expectedWords.forEach((word) => {
+        const span = document.createElement("span");
+        span.className = "shadow-result-word";
+        span.textContent = word.text;
+        fragment.appendChild(span);
+      });
+    } else {
+      result.operations.forEach((operation) => {
+        const span = document.createElement("span");
+        span.className = "shadow-result-word";
+        if (operation.type === "insert") {
+          span.classList.add("is-extra");
+          span.textContent = operation.recognized.text;
+          span.title = "多读内容";
+        } else if (operation.type === "delete") {
+          span.classList.add("is-error");
+          span.textContent = operation.expected.text;
+          span.title = "漏读";
+        } else if (operation.type === "substitute") {
+          span.classList.add("is-error");
+          span.textContent = operation.expected.text;
+          span.title = `识别为：${operation.recognized.text}`;
+        } else {
+          span.classList.add(operation.rhythmAttention ? "is-attention" : "is-good");
+          span.classList.toggle("has-stress-gap", Boolean(operation.stressGap));
+          span.textContent = operation.expected.text;
+          span.title = operation.stressGap
+            ? "匹配；重音位置可再突出"
+            : operation.rhythmAttention ? "匹配；节奏位置需要注意" : "匹配良好";
+        }
+        fragment.appendChild(span);
+      });
+    }
+    elements.shadowWordResults.replaceChildren(fragment);
+    elements.shadowRecognizedText.textContent = result.noInputDetected
+      ? "录音中没有检测到有效声音；请选择真实麦克风，不要选择虚拟音频设备。"
+      : result.recognitionUnavailable
+      ? "浏览器未返回可用的识别文本；本次仅分析录音时长、停顿与节奏。"
+      : result.recognizedText
+        ? `识别到：${result.recognizedText}`
+        : "没有识别到清晰文本；请靠近麦克风，再读一遍。";
   }
 
   function speakDictionaryTerm(accent, term) {
@@ -3538,10 +5189,20 @@
   function returnHome() {
     clearSession();
     ++state.loadToken;
+    discardShadowCapture();
+    clearShadowPlaybackWatchdog();
+    clearShadowAudio();
     setPlaying(false);
     cleanupPlayer();
     closeTuningPopovers();
-    document.body.classList.remove("workspace-active", "workspace-entering", "import-committing", "door-opening");
+    document.body.classList.remove(
+      "workspace-active",
+      "workspace-entering",
+      "import-committing",
+      "door-opening",
+      "shadow-mode-active",
+      "shadow-blind-active",
+    );
     document.documentElement.classList.remove("workspace-view-transition");
     setImportBusy(false);
     state.source = null;
@@ -3551,6 +5212,11 @@
     state.transcriptId = null;
     state.activeIndex = -1;
     state.pendingResumeTime = 0;
+    state.shadowResult = null;
+    state.shadowPhase = "idle";
+    state.shadowRoundIndex = 0;
+    state.shadowReferenceEndTime = 0;
+    state.shadowReferenceReturnPhase = null;
     state.showTranslations = false;
     state.revealedTranslations.clear();
     state.translations.clear();
@@ -3925,14 +5591,45 @@
     if (!elements.workspaceView.classList.contains("is-hidden")) returnHome();
   });
   elements.newVideoButton.addEventListener("click", returnHome);
+  elements.listeningModeButton.addEventListener("click", () => setPracticeMode("listen"));
+  elements.shadowModeButton.addEventListener("click", () => setPracticeMode("shadow"));
+  elements.shadowVariants.forEach((button) => {
+    button.addEventListener("click", () => setShadowVariant(button.dataset.shadowVariant));
+  });
+  elements.shadowDelaySelect.addEventListener("change", (event) => {
+    if (event.target.value === "custom") {
+      elements.shadowCustomDelayWrap.classList.remove("is-hidden");
+      window.requestAnimationFrame(() => elements.shadowCustomDelay.focus());
+      return;
+    }
+    setShadowDelay(event.target.value);
+  });
+  elements.shadowCustomDelay.addEventListener("input", (event) => setShadowDelay(event.target.value));
+  elements.shadowMicrophoneSelect.addEventListener("change", (event) => {
+    setShadowMicrophone(event.target.value);
+  });
+  elements.shadowHeadphoneDismiss.addEventListener("click", () => {
+    elements.shadowHeadphoneNote.dataset.dismissed = "true";
+    elements.shadowHeadphoneNote.classList.add("is-hidden");
+    try {
+      localStorage.setItem(SHADOW_HEADPHONE_HINT_KEY, "dismissed");
+    } catch (_error) {
+      // The hint remains dismissed for this page when storage is unavailable.
+    }
+  });
+  elements.shadowReferenceButton.addEventListener("click", togglePracticePlayback);
+  elements.shadowRecordButton.addEventListener("click", requestShadowRecordingToggle);
+  elements.shadowOriginalAudioButton.addEventListener("click", () => playShadowReference({ result: true }));
+  elements.shadowRetryButton.addEventListener("click", retryShadowRound);
+  elements.shadowNextButton.addEventListener("click", nextShadowRound);
   elements.playButton.addEventListener("click", () => {
     closeStudyOverlayForPlayback();
-    togglePlay();
+    togglePracticePlayback();
   });
   elements.videoStage.addEventListener("click", (event) => {
     if (event.target.closest(".extract-overlay, .caption-word") || !state.interactiveReady) return;
     closeStudyOverlayForPlayback();
-    togglePlay();
+    togglePracticePlayback();
   });
   elements.captionText.addEventListener("click", (event) => {
     const word = subtitleLookupTarget(event.target);
@@ -4152,14 +5849,20 @@
     syncLearningTimeTracking();
   });
   window.addEventListener("focus", syncLearningTimeTracking);
+  navigator.mediaDevices?.addEventListener?.("devicechange", () => {
+    if (!state.shadowCapture) void refreshShadowMicrophones();
+  });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       clearHoverLookup();
       saveSession();
+      if (state.shadowPhase === "recording") void stopShadowRecording();
     }
     syncLearningTimeTracking();
   });
   window.addEventListener("pagehide", () => {
+    discardShadowCapture();
+    clearShadowPlaybackWatchdog();
     flushLearningTime();
     saveSession();
   });
@@ -4174,6 +5877,8 @@
   document.addEventListener("pointerdown", (event) => {
     resetKeyboardRewindChain();
     if (!event.target.closest(".learning-time-wrap")) setLearningTimePanel(false);
+    if (!event.target.closest("#practiceModeSwitcher")) elements.practiceModeSwitcher.open = false;
+    if (!event.target.closest("#shadowVariantPicker")) elements.shadowVariantPicker.open = false;
     if (!event.target.closest(".tuning-menu")) closeTuningPopovers();
     if (!event.target.closest("[data-font-select]")) closeFontSelects();
     if (!event.target.closest(".custom-color-picker")) closeColorPicker();
@@ -4195,8 +5900,11 @@
 
   initializeFontSelects();
   initializeLandingGlass();
+  elements.shadowHeadphoneNote.dataset.dismissed = String(initialShadowHeadphoneHintDismissed());
   syncLearningLanguageUi();
   applySubtitleStyle();
+  syncPracticeModeUi();
+  void refreshShadowMicrophones();
   setPlaybackSpeed(SPEEDS.indexOf(state.speed));
   setVolume(state.volume);
   renderSavedWords();
@@ -4205,6 +5913,12 @@
   window.setInterval(saveSession, PLAYBACK_SESSION_FLUSH_MS);
 
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && (elements.practiceModeSwitcher.open || elements.shadowVariantPicker.open)) {
+      event.preventDefault();
+      elements.practiceModeSwitcher.open = false;
+      elements.shadowVariantPicker.open = false;
+      return;
+    }
     if (event.key === "Escape" && !elements.learningTimePanel.classList.contains("is-hidden")) {
       event.preventDefault();
       setLearningTimePanel(false);
@@ -4252,7 +5966,7 @@
     if (event.code === "Space") {
       event.preventDefault();
       resetKeyboardRewindChain();
-      togglePlay();
+      togglePracticePlayback();
     }
     if (event.code === "ArrowLeft") {
       event.preventDefault();

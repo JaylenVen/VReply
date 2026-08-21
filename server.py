@@ -1530,7 +1530,7 @@ def _post_llm_chat(
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "VReply/1.0",
+            "User-Agent": "VReply/3.0.0",
             "Connection": "close",
         },
     )
@@ -2657,7 +2657,7 @@ def analyze_sentence(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 class VReplyHandler(SimpleHTTPRequestHandler):
-    server_version = "VReply/1.0"
+    server_version = "VReply/3.0.0"
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, directory=str(ROOT_DIR), **kwargs)

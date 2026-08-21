@@ -16,11 +16,11 @@
       href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=Inter:wght@400;500;600;700&amp;family=Ma+Shan+Zheng&amp;family=Manrope:wght@400;500;600&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;family=Noto+Serif+SC:wght@400;600&amp;family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&amp;family=ZCOOL+XiaoWei&amp;display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=2.5.7-1" />
+    <meta name="application-version" content="3.1.1" />
+    <link rel="stylesheet" href="styles.css?v=3.1.1" />
   </head>
   <body>
     <div class="page-noise" aria-hidden="true"></div>
-    <span class="site-version" aria-label="当前版本 V2.5.7">V2.5.7</span>
 
     <header class="site-header">
       <button class="brand" id="brandButton" type="button" aria-label="返回 VReply 首页">
@@ -53,9 +53,6 @@
             role="dialog"
             aria-label="学习时间记录"
           >
-            <header>
-              <span>STUDY LOG</span>
-            </header>
             <div class="learning-time-total">
               <span>累计学习</span>
               <strong id="learningTimeTotal">0 分钟</strong>
@@ -66,18 +63,18 @@
             </div>
           </section>
         </div>
-        <button class="quiet-button" id="aiSettingsButton" type="button">
+        <button class="quiet-button" id="aiSettingsButton" type="button" aria-label="打开设置" title="设置">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
             <circle cx="12" cy="12" r="3.3" />
           </svg>
-          设置
+          <span>设置</span>
         </button>
-        <button class="quiet-button is-hidden" id="newVideoButton" type="button">
+        <button class="quiet-button is-hidden" id="newVideoButton" type="button" aria-label="更换视频" title="更换视频">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />
           </svg>
-          更换视频
+          <span>更换视频</span>
         </button>
       </div>
     </header>
@@ -87,16 +84,12 @@
         <div class="landing-scene" aria-hidden="true">
           <img
             class="landing-scene-frame landing-scene-minimal"
-            src="assets/landing-bg-velvet-v1.webp?v=2.5.7-1"
+            src="assets/landing-bg-velvet-v1.webp?v=3.0.0"
             alt=""
           />
         </div>
 
         <div class="landing-copy">
-          <div class="eyebrow reveal reveal-1" id="heroEyebrow">
-            Video to voice
-          </div>
-
           <h1 id="heroTitle" class="hero-title reveal reveal-2">
             <span class="hero-title-lead">Watch it.</span>
             <span class="hero-title-promise">
@@ -107,7 +100,6 @@
 
           <p class="hero-description reveal reveal-3">
             <span id="heroDescriptionPrimary">Turn a YouTube video into a focused English speaking room.</span>
-            <span id="heroDescriptionSecondary">Paste, listen, repeat — the transcript keeps your place.</span>
           </p>
         </div>
 
@@ -245,12 +237,26 @@
                   </svg>
                 </button>
               </div>
+
+              <details class="practice-mode-switcher" id="practiceModeSwitcher">
+                <summary aria-label="切换练习模式">
+                  <span id="practiceModeLabel">整体倾听</span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4" /></svg>
+                </summary>
+                <div class="practice-mode-options" role="group" aria-label="选择练习模式">
+                  <button class="practice-mode-button is-active" id="listeningModeButton" type="button" aria-pressed="true">
+                    <span><b>整体倾听</b><small>自由播放与精听</small></span>
+                  </button>
+                  <button class="practice-mode-button practice-mode-shadow" id="shadowModeButton" type="button" aria-pressed="false">
+                    <span><b>影子跟读</b><small>逐句模仿与录音</small></span>
+                  </button>
+                </div>
+              </details>
             </div>
 
             <section class="analysis-card is-hidden" id="analysisCard" role="dialog" aria-live="polite" aria-labelledby="analysisTitle">
               <header>
                 <div>
-                  <span>AI SENTENCE COACH</span>
                   <h2 id="analysisTitle">句子拆解</h2>
                 </div>
                 <button class="dictionary-close" id="analysisClose" type="button" aria-label="关闭句子分析">
@@ -398,11 +404,176 @@
             </section>
 
           </aside>
+
+          <aside class="shadow-coach-panel is-hidden" id="shadowCoachPanel" aria-label="影子跟读教练">
+            <header class="shadow-coach-heading">
+              <h2>影子跟读</h2>
+              <div class="shadow-round-status">
+                <b id="shadowSentencePosition">第 1 句 / 0</b>
+                <span id="shadowPhaseLabel" aria-live="polite">选择训练方式</span>
+              </div>
+            </header>
+
+            <div class="shadow-coach-scroll">
+              <details class="shadow-variant-section" id="shadowVariantPicker">
+                <summary aria-label="切换训练方式">
+                  <span>
+                    <b id="shadowVariantCurrentName">听一句，读一句</b>
+                    <small id="shadowVariantCurrentDescription">自动停句</small>
+                  </span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4" /></svg>
+                </summary>
+                <div class="shadow-variant-grid" role="radiogroup" aria-label="影子跟读训练方式">
+                  <button class="shadow-variant is-active" type="button" role="radio" aria-checked="true" data-shadow-variant="sentence">
+                    <span><b>听一句，读一句</b><small>自动停句</small></span>
+                  </button>
+                  <button class="shadow-variant" type="button" role="radio" aria-checked="false" data-shadow-variant="assist">
+                    <span><b>文本辅助</b><small>标记重音与停顿</small></span>
+                  </button>
+                  <button class="shadow-variant" type="button" role="radio" aria-checked="false" data-shadow-variant="delayed">
+                    <span><b>延迟跟读</b><small>跟随原声连续开口</small></span>
+                  </button>
+                  <button class="shadow-variant" type="button" role="radio" aria-checked="false" data-shadow-variant="blind">
+                    <span><b>无字幕挑战</b><small>隐藏文字练习</small></span>
+                  </button>
+                </div>
+              </details>
+
+              <section class="shadow-delay-settings is-hidden" id="shadowDelaySettings" aria-labelledby="shadowDelayTitle">
+                <span id="shadowDelayTitle">跟读延迟</span>
+                <small class="sr-only" id="shadowDelayHint">0.8 秒 · 听清后紧跟说话者</small>
+                <div class="shadow-delay-control">
+                  <select id="shadowDelaySelect" aria-label="选择跟读延迟">
+                    <option value="0">0 秒 · 同步</option>
+                    <option value="0.5">0.5 秒 · 高阶</option>
+                    <option value="0.8" selected>0.8 秒 · 推荐</option>
+                    <option value="1.2">1.2 秒 · 初学</option>
+                    <option value="custom">自定义</option>
+                  </select>
+                  <label class="shadow-custom-delay is-hidden" id="shadowCustomDelayWrap">
+                    <input id="shadowCustomDelay" type="number" min="0" max="3" step="0.1" value="0.8" inputmode="decimal" aria-label="自定义跟读延迟秒数" />
+                    <span>秒</span>
+                  </label>
+                </div>
+              </section>
+
+              <div class="shadow-headphone-note is-hidden" id="shadowHeadphoneNote" role="note">
+                <span>建议佩戴耳机，减少原声回录。</span>
+                <button id="shadowHeadphoneDismiss" type="button" aria-label="关闭耳机提示">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+                </button>
+              </div>
+
+              <section class="shadow-prompt" id="shadowPrompt">
+                <header>
+                  <span id="shadowPromptKicker">当前句</span>
+                </header>
+                <p class="shadow-prompt-text" id="shadowPromptText">字幕准备好后，从第一句开始。</p>
+                <p class="shadow-blind-placeholder is-hidden" id="shadowBlindPlaceholder">
+                  字幕已隐藏
+                </p>
+                <div class="shadow-rhythm-guide is-hidden" id="shadowRhythmGuide" aria-label="节奏标记说明">
+                  <span><b>粗体</b>重读</span>
+                  <span class="is-weak">浅色 弱读</span>
+                  <span class="is-linked">连线 连读</span>
+                  <span>/ 短停顿</span>
+                  <span>↗ ↘ 语调</span>
+                </div>
+              </section>
+
+              <section class="shadow-workbench" aria-label="跟读控制">
+                <div class="shadow-control-row">
+                  <button class="shadow-reference-button" id="shadowReferenceButton" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7 8 5-8 5V7Z" /></svg>
+                    <span><b>播放原句</b><small id="shadowReferenceDuration">00:00</small></span>
+                  </button>
+                  <button class="shadow-record-button" id="shadowRecordButton" type="button" disabled aria-label="开始录音">
+                    <span class="shadow-record-orbit" aria-hidden="true"></span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 4a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V7a3 3 0 0 1 3-3Z" />
+                      <path d="M6.5 11.5v.5a5.5 5.5 0 0 0 11 0v-.5M12 17.5V21M9 21h6" />
+                    </svg>
+                    <b id="shadowRecordLabel">开始跟读</b>
+                  </button>
+                </div>
+                <div class="shadow-record-status">
+                  <label class="shadow-microphone-picker">
+                    <span>麦克风</span>
+                    <select id="shadowMicrophoneSelect" aria-label="选择录音麦克风">
+                      <option value="">系统默认麦克风</option>
+                    </select>
+                  </label>
+                  <span class="shadow-input-meter is-hidden" id="shadowInputMeter" aria-hidden="true"><i></i></span>
+                  <span class="is-hidden" id="shadowRecordingTimer">00:00.0</span>
+                  <small class="is-hidden" id="shadowLiveTranscript" aria-live="polite"></small>
+                </div>
+              </section>
+
+              <section class="shadow-audio-compare is-hidden" id="shadowAudioCompare" aria-labelledby="shadowAudioTitle">
+                <div class="shadow-section-heading">
+                  <span id="shadowAudioTitle">声音对照</span>
+                </div>
+                <div class="shadow-audio-grid">
+                  <button id="shadowOriginalAudioButton" type="button">
+                    <span><b>播放原音</b><small id="shadowOriginalAudioMeta">当前句</small></span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7 8 5-8 5V7Z" /></svg>
+                  </button>
+                  <div class="shadow-user-audio">
+                    <audio id="shadowUserAudio" controls preload="metadata"></audio>
+                  </div>
+                </div>
+              </section>
+
+              <section class="shadow-results is-hidden" id="shadowResults" aria-labelledby="shadowResultsTitle">
+                <header class="shadow-results-heading">
+                  <div class="shadow-overall-score" id="shadowOverallScore" style="--score: 0">
+                    <strong id="shadowOverallValue">--</strong>
+                    <span>模仿完成度</span>
+                  </div>
+                  <div>
+                    <h3 id="shadowResultsTitle">本轮反馈</h3>
+                    <p id="shadowResultSummary">录音完成后显示模仿反馈。</p>
+                  </div>
+                </header>
+
+                <div class="shadow-score-grid" aria-label="分项评分">
+                  <div><span>内容完整度</span><strong id="shadowContentScore">--</strong></div>
+                  <div><span>流利度</span><strong id="shadowFluencyScore">--</strong></div>
+                  <div><span>节奏相似度</span><strong id="shadowRhythmScore">--</strong></div>
+                </div>
+
+                <div class="shadow-word-review">
+                  <div class="shadow-section-heading">
+                    <span>逐词对照</span>
+                    <small>绿 匹配 · 黄 节奏 · 红 漏读/错读 · 灰 多读 · 下划线 重音提示</small>
+                  </div>
+                  <p id="shadowWordResults"></p>
+                  <p class="shadow-recognized-text" id="shadowRecognizedText"></p>
+                </div>
+
+                <div class="shadow-diagnostics">
+                  <span><small>语速</small><b id="shadowWpm">--</b></span>
+                  <span><small>非自然停顿</small><b id="shadowPauseCount">--</b></span>
+                  <span><small>词错误率 WER</small><b id="shadowWer">--</b></span>
+                  <span><small>环境检测</small><b id="shadowLeakStatus">--</b></span>
+                </div>
+
+                <p class="shadow-score-note">
+                  评分基于浏览器语音识别、停顿与时间对齐，不等同于专业发音准确率。
+                </p>
+
+                <div class="shadow-result-actions">
+                  <button id="shadowRetryButton" type="button">再来一次</button>
+                  <button id="shadowNextButton" type="button">下一句 <span aria-hidden="true">→</span></button>
+                </div>
+              </section>
+            </div>
+          </aside>
         </div>
       </section>
     </main>
 
-    <section class="word-preview is-hidden" id="wordPreview" role="tooltip" aria-live="polite">
+      <section class="word-preview is-hidden" id="wordPreview" role="tooltip" aria-live="polite">
       <header>
         <div>
           <strong id="wordPreviewTerm"></strong>
@@ -423,7 +594,6 @@
       <section class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="aiSettingsTitle">
         <header class="settings-heading">
           <div>
-            <span class="settings-kicker">VREPLY</span>
             <h2 id="aiSettingsTitle">设置</h2>
           </div>
           <button class="settings-close" id="aiSettingsClose" type="button" aria-label="关闭设置">
@@ -448,7 +618,6 @@
               <section class="settings-pane" id="settingsAppearance" role="tabpanel" data-settings-pane="appearance" aria-labelledby="subtitleAppearanceTitle">
                 <header class="settings-pane-heading">
                   <div><h3 id="subtitleAppearanceTitle">实时预览</h3></div>
-                  <span>LIVE</span>
                 </header>
                 <div class="subtitle-style-preview" aria-label="字幕样式预览">
                   <p id="subtitlePreviewOriginal">Speak clearly, stay curious.</p>
@@ -634,6 +803,6 @@
     <script>
       window.VREPLY_TRANSCRIBE_ENDPOINT = "/api/transcribe";
     </script>
-    <script src="app.js?v=2.5.7-1"></script>
+    <script src="app.js?v=3.1.1"></script>
   </body>
 </html>
