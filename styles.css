@@ -9238,6 +9238,14 @@ body.shadow-blind-active .caption-overlay::after {
   display: none;
 }
 
+.settings-pane .settings-section-heading {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.settings-pane .settings-section-heading h3 {
+  white-space: nowrap;
+}
+
 .settings-nav b {
   font-size: 16px;
 }
