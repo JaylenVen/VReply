@@ -2663,6 +2663,9 @@ class VReplyHandler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(ROOT_DIR), **kwargs)
 
     def end_headers(self) -> None:
+        path = urlsplit(self.path).path.lower()
+        if path == "/" or path.endswith((".html", ".css", ".js")):
+            self.send_header("Cache-Control", "no-cache")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
         super().end_headers()
