@@ -4,6 +4,7 @@
   const DEFAULT_DURATION = 150;
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3];
   const LEARNING_LANGUAGE_KEY = "vreply:learning-language";
+  const THEME_PREFERENCE_KEY = "vreply:theme-preference:v1";
   const TRANSLATION_ENGINE_KEY = "vreply:translation-engine";
   const PRONUNCIATION_ACCENT_KEY = "vreply:pronunciation-accent";
   const SUBTITLE_STYLE_KEY = "vreply:subtitle-style";
@@ -23,6 +24,8 @@
   const SHADOW_SILENCE_WARNING_MS = 1800;
   const SHADOW_VOICE_RMS_THRESHOLD = 0.012;
   const SHADOW_REDUCED_VOLUME = 24;
+  const THEME_PREFERENCES = new Set(["dark", "light", "system"]);
+  const SYSTEM_THEME_QUERY = window.matchMedia("(prefers-color-scheme: dark)");
   const WORD_SEGMENTERS = new Map();
   const SHADOW_VARIANTS = new Set(["sentence", "assist", "delayed", "blind"]);
   const SHADOW_WEAK_WORDS = new Set([
@@ -151,6 +154,15 @@
     "used to": ["过去常常", "describes a past habit or state"],
     "work on": ["从事；改善", "spend time developing something"],
   }));
+
+  function initialThemePreference() {
+    try {
+      const saved = localStorage.getItem(THEME_PREFERENCE_KEY);
+      return THEME_PREFERENCES.has(saved) ? saved : "system";
+    } catch (_error) {
+      return "system";
+    }
+  }
 
   function initialLearningLanguage() {
     try {
@@ -303,6 +315,7 @@
     aiConfigStatus: document.getElementById("aiConfigStatus"),
     settingsNav: document.querySelector(".settings-nav"),
     settingsPanes: Array.from(document.querySelectorAll("[data-settings-pane]")),
+    themePreferenceInputs: Array.from(document.querySelectorAll('input[name="themePreference"]')),
     subtitleScaleDown: document.getElementById("subtitleScaleDown"),
     subtitleScaleUp: document.getElementById("subtitleScaleUp"),
     subtitleScaleValue: document.getElementById("subtitleScaleValue"),
@@ -502,6 +515,7 @@
   };
 
   const state = {
+    themePreference: initialThemePreference(),
     learningLanguage: INITIAL_LEARNING_LANGUAGE,
     practiceMode: initialPracticeMode(),
     shadowVariant: INITIAL_SHADOW_SETTINGS.variant,
@@ -546,6 +560,7 @@
     pronunciationAccent: initialPronunciationAccent(INITIAL_LEARNING_LANGUAGE),
     subtitleStyle: initialSubtitleStyle(),
     settingsStyleSnapshot: null,
+    settingsThemeSnapshot: null,
     chromeTranslationAvailability: "checking",
     chromeTranslator: null,
     chromeTranslatorLanguage: null,
@@ -1176,7 +1191,7 @@
     state.playerReady = false;
     elements.videoMount.replaceChildren();
     elements.videoAmbient.style.backgroundImage = source.kind === "youtube"
-      ? `linear-gradient(rgba(8, 12, 9, 0.44), rgba(8, 12, 9, 0.74)), url("https://i.ytimg.com/vi/${source.id}/maxresdefault.jpg")`
+      ? `url("https://i.ytimg.com/vi/${source.id}/maxresdefault.jpg")`
       : "";
     elements.videoPlaceholder.classList.remove("is-hidden");
 
@@ -2501,6 +2516,43 @@
     elements.customColorButton.setAttribute("aria-expanded", "false");
   }
 
+  function resolvedTheme(preference = state.themePreference) {
+    return preference === "system"
+      ? (SYSTEM_THEME_QUERY.matches ? "dark" : "light")
+      : preference;
+  }
+
+  function applyThemePreference() {
+    const resolved = resolvedTheme();
+    const root = document.documentElement;
+    root.dataset.theme = resolved;
+    root.dataset.themePreference = state.themePreference;
+    root.style.colorScheme = resolved;
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.content = resolved === "dark" ? "#0e1115" : "#f8f9f4";
+  }
+
+  function syncThemeControls() {
+    elements.themePreferenceInputs.forEach((input) => {
+      input.checked = input.value === state.themePreference;
+    });
+  }
+
+  function setThemePreference(preference) {
+    if (!THEME_PREFERENCES.has(preference)) return;
+    state.themePreference = preference;
+    applyThemePreference();
+    syncThemeControls();
+  }
+
+  function persistThemePreference() {
+    try {
+      localStorage.setItem(THEME_PREFERENCE_KEY, state.themePreference);
+    } catch (_error) {
+      // The theme remains active for the current session when storage is unavailable.
+    }
+  }
+
   function updateColorSaturationFromPointer(event) {
     const bounds = elements.colorSaturation.getBoundingClientRect();
     colorPickerHsv.s = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
@@ -2602,6 +2654,8 @@
     elements.pronunciationAccentUk.checked = state.pronunciationAccent === elements.pronunciationAccentUk.value;
     elements.aiSettingsError.textContent = "";
     state.settingsStyleSnapshot = { ...state.subtitleStyle };
+    state.settingsThemeSnapshot = state.themePreference;
+    syncThemeControls();
     syncSubtitleStyleControls();
     setSettingsPane(pane);
     syncTranslationSettingsForm();
@@ -2624,7 +2678,11 @@
       state.subtitleStyle = { ...state.settingsStyleSnapshot };
       applySubtitleStyle();
     }
+    if (state.settingsThemeSnapshot && !(options && options.keepChanges)) {
+      setThemePreference(state.settingsThemeSnapshot);
+    }
     state.settingsStyleSnapshot = null;
+    state.settingsThemeSnapshot = null;
     closeFontSelects();
     closeColorPicker();
     elements.aiSettingsModal.classList.add("is-hidden");
@@ -2696,7 +2754,9 @@
         resetSummaryView();
       }
       persistSubtitleStyle();
+      persistThemePreference();
       state.settingsStyleSnapshot = null;
+      state.settingsThemeSnapshot = null;
       closeAiSettings({ keepChanges: true });
       showToast(
         "设置已保存",
@@ -5511,6 +5571,11 @@
     const button = event.target.closest("[data-settings-target]");
     if (button) setSettingsPane(button.dataset.settingsTarget);
   });
+  elements.themePreferenceInputs.forEach((input) => {
+    input.addEventListener("change", () => {
+      if (input.checked) setThemePreference(input.value);
+    });
+  });
   elements.subtitleScaleDown.addEventListener("click", () => adjustSubtitleScale(-10));
   elements.subtitleScaleUp.addEventListener("click", () => adjustSubtitleScale(10));
   [
@@ -5849,6 +5914,9 @@
     syncLearningTimeTracking();
   });
   window.addEventListener("focus", syncLearningTimeTracking);
+  SYSTEM_THEME_QUERY.addEventListener("change", () => {
+    if (state.themePreference === "system") applyThemePreference();
+  });
   navigator.mediaDevices?.addEventListener?.("devicechange", () => {
     if (!state.shadowCapture) void refreshShadowMicrophones();
   });
@@ -5898,6 +5966,8 @@
   window.addEventListener("resize", syncAppViewportHeight, { passive: true });
   window.visualViewport?.addEventListener("resize", syncAppViewportHeight, { passive: true });
 
+  applyThemePreference();
+  syncThemeControls();
   initializeFontSelects();
   initializeLandingGlass();
   elements.shadowHeadphoneNote.dataset.dismissed = String(initialShadowHeadphoneHintDismissed());

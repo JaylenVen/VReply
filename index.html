@@ -7,7 +7,26 @@
       name="description"
       content="VReply 把英语或西班牙语视频变成专注、自然的口语跟读练习。"
     />
-    <meta name="theme-color" content="#100f0d" />
+    <meta name="theme-color" content="#0e1115" />
+    <script>
+      (() => {
+        const storageKey = "vreply:theme-preference:v1";
+        let preference = "system";
+        try {
+          const saved = localStorage.getItem(storageKey);
+          if (["dark", "light", "system"].includes(saved)) preference = saved;
+        } catch (_error) {
+          // The system preference remains available when storage is blocked.
+        }
+        const resolved = preference === "system"
+          ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+          : preference;
+        document.documentElement.dataset.theme = resolved;
+        document.documentElement.dataset.themePreference = preference;
+        document.documentElement.style.colorScheme = resolved;
+        document.querySelector('meta[name="theme-color"]').content = resolved === "dark" ? "#0e1115" : "#f8f9f4";
+      })();
+    </script>
     <title>VReply</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%231b1812'/%3E%3Ctext x='18' y='46' fill='%23f6f3ec' font-size='42' font-family='Helvetica'%3EV%3C/text%3E%3Ccircle cx='53' cy='53' r='9' fill='%23ddb25b'/%3E%3C/svg%3E" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -16,8 +35,9 @@
       href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=Inter:wght@400;500;600;700&amp;family=Ma+Shan+Zheng&amp;family=Manrope:wght@400;500;600&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;family=Noto+Serif+SC:wght@400;600&amp;family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&amp;family=ZCOOL+XiaoWei&amp;display=swap"
       rel="stylesheet"
     />
-    <meta name="application-version" content="3.1.9" />
-    <link rel="stylesheet" href="styles.css?v=3.1.9" />
+    <meta name="application-version" content="3.2.3" />
+    <link rel="stylesheet" href="styles.css?v=3.2.1" />
+    <link rel="stylesheet" href="themes.css?v=3.2.3" />
   </head>
   <body>
     <div class="page-noise" aria-hidden="true"></div>
@@ -617,8 +637,17 @@
             <div class="settings-stage">
               <section class="settings-pane" id="settingsAppearance" role="tabpanel" data-settings-pane="appearance" aria-labelledby="subtitleAppearanceTitle">
                 <header class="settings-pane-heading">
-                  <div><h3 id="subtitleAppearanceTitle">实时预览</h3></div>
+                  <div><h3 id="subtitleAppearanceTitle">样式</h3></div>
                 </header>
+                <fieldset class="theme-selector">
+                  <legend>主题</legend>
+                  <div class="theme-options">
+                    <label><input name="themePreference" type="radio" value="dark" /><span>静夜</span></label>
+                    <label><input name="themePreference" type="radio" value="light" /><span>晴昼</span></label>
+                    <label><input name="themePreference" type="radio" value="system" /><span>跟随系统</span></label>
+                  </div>
+                </fieldset>
+                <h4 class="subtitle-settings-heading">字幕</h4>
                 <div class="subtitle-style-preview" aria-label="字幕样式预览">
                   <p id="subtitlePreviewOriginal">Speak clearly, stay curious.</p>
                   <small id="subtitlePreviewTranslation">清晰表达，保持好奇。</small>
@@ -803,6 +832,6 @@
     <script>
       window.VREPLY_TRANSCRIBE_ENDPOINT = "/api/transcribe";
     </script>
-    <script src="app.js?v=3.1.9"></script>
+    <script src="app.js?v=3.2.2"></script>
   </body>
 </html>
