@@ -6,7 +6,7 @@ VReply 是一款本地运行的英语、西班牙语学习工具。粘贴视频�
 
 ## 最新进展
 
-截至 2026 年 8 月 24 日，仓库 `main` 分支的最新提交为 `ae92c82`（提交信息：v2.6.4）。README 已同步以下已实现功能：
+当前版本为 `v2.6.5`。README 已同步以下已实现功能：
 
 - **影子跟读**：支持“听一句，读一句”“文本辅助”“延迟跟读”和“无字幕挑战”四种训练方式；可选择麦克风、录制自己的声音，并与原音对照。
 - **练习反馈**：在浏览器能力允许时，提供内容完整度、流利度、节奏相似度、语速、停顿和词错误率等参考指标。评分基于浏览器语音识别与时间对齐，不等同于专业发音测评。
@@ -92,3 +92,9 @@ python scripts/build_local_dictionary.py path/to/ecdict.csv
 ```
 
 ECDICT 数据采用 MIT License，许可文本见 [`third_party/ECDICT-LICENSE.txt`](third_party/ECDICT-LICENSE.txt)。
+
+## 开源与贡献
+
+VReply 源代码采用 [MIT License](LICENSE)。项目内置的 ECDICT 数据同样采用 MIT License，其许可文本单独保存在 [`third_party/ECDICT-LICENSE.txt`](third_party/ECDICT-LICENSE.txt)。
+
+提交 Issue 或 Pull Request 前，请阅读 [贡献指南](CONTRIBUTING.md)。安全问题请按照 [安全策略](SECURITY.md) 私下报告，不要公开披露漏洞细节或 API Key。
