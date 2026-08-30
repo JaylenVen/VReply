@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 .venv/
 
-# Local secrets and visual QA artifacts
+# Local secrets and internal development artifacts
 .env
+AGENTS.md
+artifacts/
+design-qa.md
 design-qa-*.png

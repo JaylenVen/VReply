@@ -20,13 +20,13 @@ VReply 是一款本地运行的英语、西班牙语学习工具。粘贴视频�
 
 视频、当前句和逐句字幕保持在同一练习区，可随时切换双语字幕、搜索、循环和播放速度。
 
-![VReply 晴昼主题的整体倾听界面](artifacts/theme-audit/21-final-preview-light.jpg)
+![VReply 晴昼主题的整体倾听界面](assets/vreply-listening-preview.jpg)
 
 ### 影子跟读
 
 从整体倾听切换到影子跟读后，可按当前字幕播放原句、录音并逐句练习。
 
-![VReply 晴昼主题的影子跟读界面](artifacts/theme-audit/15-shadowing-light-after.jpg)
+![VReply 晴昼主题的影子跟读界面](assets/vreply-shadowing-preview.jpg)
 
 ## 功能
 
