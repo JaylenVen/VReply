@@ -10569,3 +10569,48 @@ body.shadow-blind-active .caption-overlay::after {
     justify-content: flex-start;
   }
 }
+.interface-language-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.045);
+}
+
+.interface-language-switch button {
+  min-width: 38px;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font: 600 11px/1 "IBM Plex Sans", sans-serif;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.interface-language-switch button:hover {
+  color: var(--ink);
+}
+
+.interface-language-switch button[aria-checked="true"] {
+  color: var(--ink);
+  background: rgba(var(--accent-rgb), 0.14);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.14);
+}
+
+.interface-language-switch button:focus-visible {
+  outline: 2px solid var(--acid);
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .interface-language-switch button {
+    min-width: 34px;
+    padding: 0 8px;
+  }
+}

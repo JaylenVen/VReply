@@ -1,49 +1,51 @@
 # VReply
 
-把带字幕的 YouTube 视频转换为逐句精听与影子跟读练习。
+Turn subtitled YouTube videos into line-by-line listening and shadowing practice.
 
-VReply 是一款本地运行的英语、西班牙语学习工具。粘贴视频链接后，可以跟随字幕精听、循环单句、录制跟读、查词和复习。基础功能无需账号、前端构建工具或第三方 Python 包。
+VReply is a local-first learning tool for English and Spanish. Paste a video link to listen closely with synchronized subtitles, loop individual sentences, record shadowing attempts, look up words, and review saved vocabulary. The core experience requires no account, frontend build tools, or third-party Python packages.
 
-## 最新进展
+## Latest Updates
 
-当前版本为 `v2.6.5`。README 已同步以下已实现功能：
+The current version is `v3.3.0`. This release includes:
 
-- **影子跟读**：支持“听一句，读一句”“文本辅助”“延迟跟读”和“无字幕挑战”四种训练方式；可选择麦克风、录制自己的声音，并与原音对照。
-- **练习反馈**：在浏览器能力允许时，提供内容完整度、流利度、节奏相似度、语速、停顿和词错误率等参考指标。评分基于浏览器语音识别与时间对齐，不等同于专业发音测评。
-- **主题与响应式界面**：新增“静夜”“晴昼”和“跟随系统”主题；练习区、设置、内容简介、生词本与窄屏布局均已适配两套配色。
-- **学习状态恢复**：刷新或重新打开页面后，自动恢复上次的视频、学习语言与播放进度；学习时长、生词、字幕样式和练习偏好保存在本地浏览器中。
-- **字幕体验优化**：字幕高亮跟随当前发音位置，并保留点句跳转、搜索、导出、自动跟随和单句循环。
+- **Chinese and English interface languages**: switch the website controls and interface copy independently of the learning language and subtitle translation language; the preference is saved in the browser.
+- **Shadowing practice**: choose from Listen & Repeat, Text Guidance, Delayed Shadowing, and No-Subtitle Challenge; select a microphone, record your voice, and compare it with the original audio.
+- **Practice feedback**: when browser capabilities permit, receive reference metrics for content completeness, fluency, rhythm similarity, speaking rate, pauses, and word error rate. Scores use browser speech recognition and timing alignment and are not professional pronunciation assessments.
+- **Themes and responsive UI**: use Night, Day, or System themes across the practice workspace, settings, overview, saved words, and narrow-screen layouts.
+- **Session recovery**: reopening or refreshing the page restores the last video, learning language, and playback position. Learning time, saved words, subtitle styling, interface language, and practice preferences stay in local browser storage.
+- **Improved subtitle experience**: word highlighting follows the current spoken position while sentence seeking, search, export, auto-follow, and sentence looping remain available.
 
-## 界面预览
+## Interface Preview
 
-### 整体倾听
+### Listening
 
-视频、当前句和逐句字幕保持在同一练习区，可随时切换双语字幕、搜索、循环和播放速度。
+The video, current sentence, and line-by-line transcript share one practice workspace. Bilingual subtitles, search, looping, and playback speed remain within easy reach.
 
-![VReply 晴昼主题的整体倾听界面](assets/vreply-listening-preview.jpg)
+![VReply listening interface in the Day theme](assets/vreply-listening-preview.jpg)
 
-### 影子跟读
+### Shadowing
 
-从整体倾听切换到影子跟读后，可按当前字幕播放原句、录音并逐句练习。
+Switch from Listening to Shadowing to play the current subtitle line, record your response, and practice sentence by sentence.
 
-![VReply 晴昼主题的影子跟读界面](assets/vreply-shadowing-preview.jpg)
+![VReply shadowing interface in the Day theme](assets/vreply-shadowing-preview.jpg)
 
-## 功能
+## Features
 
-- 英语与西班牙语学习模式
-- 字幕同步、逐词高亮、点句跳转、上下句切换与单句循环
-- 0.5×–3.0× 倍速、音量调节与字幕自动跟随
-- 整体倾听与四种影子跟读训练方式
-- 浏览器端录音、原音/录音对照与跟读反馈
-- 字幕搜索、文本导出、单词收藏与学习时长记录
-- 英语本地词典与英/美发音；西班牙/墨西哥发音
-- Chrome 本地翻译或自定义模型 API 双语字幕
-- 可选 AI 能力：语境查词、句子分析、字幕翻译、内容简介
-- 静夜、晴昼与跟随系统主题
+- Chinese and English website interface languages
+- English and Spanish learning modes
+- Synchronized subtitles, word-level highlighting, sentence seeking, previous/next sentence navigation, and sentence looping
+- 0.5×–3.0× playback speed, volume control, and subtitle auto-follow
+- Listening mode and four shadowing practice modes
+- In-browser recording, original/recording comparison, and shadowing feedback
+- Transcript search, text export, saved words, and learning-time tracking
+- Local English dictionary with US/UK pronunciation; Spain/Mexico pronunciation for Spanish
+- Bilingual subtitles through Chrome on-device translation or a custom model API
+- Optional AI features: contextual dictionary lookup, sentence analysis, subtitle translation, and video overviews
+- Night, Day, and System themes
 
-## 快速开始
+## Quick Start
 
-要求：Python 3.10+、可访问 YouTube 的现代桌面浏览器。
+Requirements: Python 3.10+ and a modern desktop browser with access to YouTube.
 
 ```bash
 git clone https://github.com/JaylenVen/VReply.git
@@ -51,50 +53,51 @@ cd VReply
 python server.py
 ```
 
-服务启动后，按终端提示在浏览器中访问 VReply，选择学习语言并导入带对应语言字幕的 YouTube 视频。
+After the server starts, open the address shown in the terminal, choose a learning language, and import a YouTube video that has subtitles in that language.
 
-> VReply 读取视频已有的字幕，不执行语音识别生成字幕。无对应语言字幕、受地区限制或需要登录的视频可能无法使用。
+> VReply reads subtitles already provided with the video; it does not generate subtitles through speech recognition. Videos without subtitles in the selected language, with regional restrictions, or requiring sign-in may not work.
 
-### 影子跟读的浏览器要求
+### Browser Requirements for Shadowing
 
-录音需要浏览器允许麦克风访问，并通过 `localhost` 或 HTTPS 打开页面。完整的逐词与流利度反馈还依赖浏览器的 Web Speech Recognition 支持；不支持时仍可录音和回放，但不会生成完整识别指标。建议使用最新版 Chrome 或 Edge。
+Recording requires microphone permission and a page served from `localhost` or HTTPS. Full word-level and fluency feedback also depends on Web Speech Recognition support. On unsupported browsers, recording and playback still work, but complete recognition metrics are unavailable. The latest Chrome or Edge is recommended.
 
-## 翻译与 AI
+## Translation and AI
 
-基础练习和影子跟读无需模型 API。需要双语字幕时，可在 **设置** 中选择：
+Core listening and shadowing practice do not require a model API. For bilingual subtitles, choose one of these options in **Settings**:
 
-- **Chrome 本地翻译**：使用浏览器内置 Translator API，无需 API Key；可用性由页面自动检测。
-- **自定义模型 API**：支持兼容 OpenAI Chat Completions 的接口。
+- **Chrome on-device translation**: uses the browser's built-in Translator API without an API key; VReply checks availability automatically.
+- **Custom model API**: supports endpoints compatible with OpenAI Chat Completions.
 
-模型也可通过环境变量配置：
+You can also configure the model through environment variables:
 
-| 变量 | 说明 |
+| Variable | Description |
 | --- | --- |
-| `VREPLY_LLM_BASE_URL` | API 基础地址 |
-| `VREPLY_LLM_API_KEY` | API Key |
-| `VREPLY_LLM_MODEL` | 模型名称 |
-| `VREPLY_HOST` | 服务监听地址 |
-| `VREPLY_PORT` | 服务监听端口 |
+| `VREPLY_LLM_BASE_URL` | API base URL |
+| `VREPLY_LLM_API_KEY` | API key |
+| `VREPLY_LLM_MODEL` | Model name |
+| `VREPLY_HOST` | Server bind address |
+| `VREPLY_PORT` | Server port |
 
-页面中填写的 API Key 仅保存在当前服务进程内，不会由配置接口返回浏览器；服务停止后配置失效。请勿提交 API Key，也不要在缺少身份验证和访问控制时将服务直接暴露到公网。
+An API key entered in the page is stored only in the current server process and is never returned to the browser by the configuration endpoint. The configuration disappears when the server stops. Never commit API keys or expose the server directly to the public internet without authentication and access controls.
 
-## 开发
+## Development
 
 ```bash
 python -m unittest -v
 node --check app.js
+node --check i18n.js
 ```
 
-项目内置 [ECDICT](https://github.com/skywind3000/ECDICT) 精简词库。如需从 ECDICT CSV 重建：
+VReply includes a compact dictionary derived from [ECDICT](https://github.com/skywind3000/ECDICT). To rebuild it from an ECDICT CSV file:
 
 ```bash
 python scripts/build_local_dictionary.py path/to/ecdict.csv
 ```
 
-ECDICT 数据采用 MIT License，许可文本见 [`third_party/ECDICT-LICENSE.txt`](third_party/ECDICT-LICENSE.txt)。
+ECDICT data is distributed under the MIT License. See [`third_party/ECDICT-LICENSE.txt`](third_party/ECDICT-LICENSE.txt) for the license text.
 
-## 开源与贡献
+## License and Contributing
 
-VReply 源代码采用 [MIT License](LICENSE)。项目内置的 ECDICT 数据同样采用 MIT License，其许可文本单独保存在 [`third_party/ECDICT-LICENSE.txt`](third_party/ECDICT-LICENSE.txt)。
+VReply source code is available under the [MIT License](LICENSE). The bundled ECDICT data is also under the MIT License, with its license stored separately at [`third_party/ECDICT-LICENSE.txt`](third_party/ECDICT-LICENSE.txt).
 
-提交 Issue 或 Pull Request 前，请阅读 [贡献指南](CONTRIBUTING.md)。安全问题请按照 [安全策略](SECURITY.md) 私下报告，不要公开披露漏洞细节或 API Key。
+Before opening an issue or pull request, read the [contribution guide](CONTRIBUTING.md). Report security issues privately according to the [security policy](SECURITY.md); do not disclose vulnerability details or API keys in public.

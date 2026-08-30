@@ -25,6 +25,14 @@
         document.documentElement.dataset.themePreference = preference;
         document.documentElement.style.colorScheme = resolved;
         document.querySelector('meta[name="theme-color"]').content = resolved === "dark" ? "#0e1115" : "#f8f9f4";
+
+        let interfaceLanguage = "zh-CN";
+        try {
+          if (localStorage.getItem("vreply:interface-language:v1") === "en") interfaceLanguage = "en";
+        } catch (_error) {
+          // Chinese remains the default when storage is unavailable.
+        }
+        document.documentElement.lang = interfaceLanguage;
       })();
     </script>
     <title>VReply</title>
@@ -56,6 +64,10 @@
       </div>
 
       <div class="header-actions">
+        <div class="interface-language-switch" id="interfaceLanguageSwitch" role="radiogroup" aria-label="界面语言">
+          <button type="button" data-interface-language="zh-CN" role="radio" aria-checked="true">中文</button>
+          <button type="button" data-interface-language="en" role="radio" aria-checked="false">EN</button>
+        </div>
         <div class="learning-time-wrap">
           <button
             class="quiet-button learning-time-button"
@@ -832,6 +844,7 @@
     <script>
       window.VREPLY_TRANSCRIBE_ENDPOINT = "/api/transcribe";
     </script>
-    <script src="app.js?v=3.2.2"></script>
+    <script src="i18n.js?v=3.3.0"></script>
+    <script src="app.js?v=3.3.0"></script>
   </body>
 </html>
